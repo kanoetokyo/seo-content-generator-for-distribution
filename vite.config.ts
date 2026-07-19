@@ -6,6 +6,10 @@ export default defineConfig(({ mode }) => {
   // Load environment variables from .env files
   const env = loadEnv(mode, process.cwd(), "");
 
+  const apiUrl = env.VITE_API_URL || "/api";
+  const backendUrl = env.VITE_BACKEND_URL || ".";
+  const imageGenUrl = env.VITE_IMAGE_GEN_URL || "";
+
   // Log for debugging (本番環境では出力しない)
   if (mode !== "production") {
     console.log("Vite config - Mode:", mode);
@@ -39,9 +43,11 @@ export default defineConfig(({ mode }) => {
         env.GEMINI_API_KEY || ""
       ),
       "import.meta.env.VITE_INTERNAL_API_KEY": JSON.stringify(
-        env.VITE_INTERNAL_API_KEY || ""
+        env.VITE_INTERNAL_API_KEY || env.INTERNAL_API_KEY || ""
       ),
-      "import.meta.env.VITE_API_URL": JSON.stringify(env.VITE_API_URL || ""),
+      "import.meta.env.VITE_API_URL": JSON.stringify(apiUrl),
+      "import.meta.env.VITE_BACKEND_URL": JSON.stringify(backendUrl),
+      "import.meta.env.VITE_IMAGE_GEN_URL": JSON.stringify(imageGenUrl),
       // Google Search APIキーはサーバー側でのみ使用（セキュリティのため）
     },
     resolve: {

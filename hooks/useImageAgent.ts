@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useRef, useState } from "react";
+import { getImageAgentUrl } from "../utils/imageAgentUrl";
 
 export interface ArticleDataForImageAgent {
   title: string;
@@ -79,10 +80,7 @@ export function useImageAgent(options: UseImageAgentOptions = {}): UseImageAgent
 
   // 画像生成エージェントのURL取得
   const getImageGenUrl = useCallback(() => {
-    return (
-      import.meta.env.VITE_IMAGE_GEN_URL ||
-      "http://localhost:5177"
-    );
+    return getImageAgentUrl();
   }, []);
 
   // タイムアウトをクリア
@@ -115,6 +113,16 @@ export function useImageAgent(options: UseImageAgentOptions = {}): UseImageAgent
   const openInIframe = useCallback(
     (articleData: ArticleDataForImageAgent) => {
       const url = getImageGenUrl();
+      if (!url) {
+        const message = "画像生成エージェントURLが未設定です";
+        console.warn(message);
+        onError?.(message);
+        onComplete?.(false, {
+          row: articleData.spreadsheetRow,
+          keyword: articleData.keyword,
+        });
+        return;
+      }
       console.log("🖼️ 画像生成エージェントをiframeで開きます:", url);
 
       currentArticleDataRef.current = articleData;
@@ -140,6 +148,12 @@ export function useImageAgent(options: UseImageAgentOptions = {}): UseImageAgent
   const openInNewTab = useCallback(
     (articleData: ArticleDataForImageAgent): Window | null => {
       const url = getImageGenUrl();
+      if (!url) {
+        const message = "画像生成エージェントURLが未設定です";
+        console.warn(message);
+        onError?.(message);
+        return null;
+      }
       console.log("🔗 画像生成エージェントを別タブで開きます:", url);
 
       currentArticleDataRef.current = articleData;

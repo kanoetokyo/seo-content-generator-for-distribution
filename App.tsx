@@ -33,6 +33,17 @@ import ArticleRevisionForm from "./components/ArticleRevisionForm";
 import { useImageAgent, type ArticleDataForImageAgent } from "./hooks/useImageAgent";
 import { ImageGeneratorIframe } from "./components/ImageGeneratorIframe";
 
+type BackendHealth = {
+  status: "checking" | "ready" | "error";
+  features?: {
+    gemini?: boolean;
+    googleSearch?: boolean;
+    serper?: boolean;
+    spreadsheet?: boolean;
+    wordpress?: boolean;
+  };
+};
+
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<
     "main" | "textcheck" | "factcheck" | "revision"
@@ -65,6 +76,9 @@ const App: React.FC = () => {
   const [showArticleWriter, setShowArticleWriter] = useState(false);
   const [writingMode, setWritingMode] = useState<"v1" | "v2" | "v3">("v1");
   const [isV2Mode, setIsV2Mode] = useState<boolean>(false);
+  const [backendHealth, setBackendHealth] = useState<BackendHealth>({
+    status: "checking",
+  });
 
   // フル自動モード用の状態
   const [isFullAutoMode, setIsFullAutoMode] = useState<boolean>(false);
@@ -105,6 +119,36 @@ const App: React.FC = () => {
   const keywordQueueRef = useRef<Array<{ row: number; keyword: string }>>([]);
   const isLaunchingRef = useRef<boolean>(false); // Mutex: 起動中フラグ
   const handleGenerateFullAutoRef = useRef<any>(null); // handleGenerateFullAutoの参照
+
+  useEffect(() => {
+    let isMounted = true;
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || ".";
+
+    fetch(`${backendUrl}/api/health`)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`API health check failed: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (!isMounted) return;
+        setBackendHealth({
+          status: data?.status === "ok" ? "ready" : "error",
+          features: data?.features,
+        });
+      })
+      .catch((err) => {
+        console.warn("APIヘルスチェックに失敗しました:", err);
+        if (isMounted) {
+          setBackendHealth({ status: "error" });
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // refを常に最新のstateに同期
   useEffect(() => {
@@ -1358,39 +1402,124 @@ const App: React.FC = () => {
     );
   }
 
+  const geminiConfigured = Boolean(
+    import.meta.env.VITE_GEMINI_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      backendHealth.features?.gemini
+  );
+  const searchConfigured = Boolean(
+    backendHealth.features?.googleSearch || backendHealth.features?.serper
+  );
+  const setupItems = [
+    {
+      label: "Gemini API",
+      ready: geminiConfigured,
+      detail: geminiConfigured
+        ? "記事構成・本文生成に利用できます"
+        : ".env または Vercel環境変数に設定が必要です",
+    },
+    {
+      label: "競合検索",
+      ready: searchConfigured,
+      detail: searchConfigured
+        ? "検索結果を使った競合分析ができます"
+        : "Google Custom Search または Serper は未設定です",
+    },
+    {
+      label: "APIサーバー",
+      ready: backendHealth.status === "ready",
+      detail:
+        backendHealth.status === "checking"
+          ? "接続確認中です"
+          : backendHealth.status === "ready"
+          ? "同一Webアプリ内で起動しています"
+          : "接続できません。起動状態を確認してください",
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 text-gray-800 font-sans flex flex-col items-center p-4 sm:p-6 lg:p-8">
-      <header className="w-full max-w-5xl mb-8">
-        {/* メインタイトル */}
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <div className="p-2 bg-blue-100 rounded-xl">
-              <LogoIcon className="h-8 w-8 text-blue-600" />
+    <div className="min-h-screen bg-slate-50 text-gray-800 font-sans flex flex-col items-center p-4 sm:p-6 lg:p-8">
+      <header className="w-full max-w-6xl mb-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+              <LogoIcon className="h-4 w-4" />
+              Web公開対応
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-              Content Creation Agents
+            <h1 className="mt-4 text-3xl sm:text-4xl font-bold text-gray-900">
+              SEO記事生成エージェント
             </h1>
+            <p className="mt-3 max-w-2xl text-gray-600">
+              キーワード入力から競合分析、構成案、記事本文、校閲までを同じ画面で進められます。
+            </p>
           </div>
-          <p className="text-gray-500 text-sm sm:text-base">
-            競合サイトを分析し、検索上位を狙える記事構成案をAIが作成します
-          </p>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={() => handleSpreadsheetModeWithRetry()}
+              disabled={isLoading || isProcessingQueue}
+              className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              スプレッドシートから一括作成
+              {isProcessingQueue &&
+                queueProgress &&
+                ` (${queueProgress.current}/${queueProgress.total})`}
+            </button>
+          </div>
         </div>
-        {/* ツールボタン */}
-        <div className="flex gap-2 sm:gap-3 justify-center flex-wrap">
-          <button
-            onClick={() => handleSpreadsheetModeWithRetry()}
-            disabled={isLoading || isProcessingQueue}
-            className="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            スプレッドシートモード
-            {isProcessingQueue &&
-              queueProgress &&
-              ` (${queueProgress.current}/${queueProgress.total})`}
-          </button>
+
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          {[
+            ["1", "キーワード入力", "狙いたい検索語を入れて作成を開始"],
+            ["2", "競合分析・構成", "上位記事を調べて見出し案を作成"],
+            ["3", "本文・校閲", "記事化してチェック結果まで確認"],
+          ].map(([number, title, description]) => (
+            <div
+              key={number}
+              className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-900 text-sm font-bold text-white">
+                  {number}
+                </div>
+                <div>
+                  <h2 className="font-semibold text-gray-900">{title}</h2>
+                  <p className="mt-1 text-sm text-gray-500">{description}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          {setupItems.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-gray-800">
+                  {item.label}
+                </span>
+                <span
+                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                    item.ready
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {item.ready ? "設定済み" : "要確認"}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-gray-500">
+                {item.detail}
+              </p>
+            </div>
+          ))}
         </div>
       </header>
 
-      <main className="w-full max-w-5xl flex-grow">
+      <main className="w-full max-w-6xl flex-grow">
         <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 border border-gray-200">
           <KeywordInputForm
             onGenerate={handleGenerate}

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { SeoOutline } from "../types";
+import { getImageAgentUrl } from "../utils/imageAgentUrl";
 
 interface ArticleDisplayProps {
   article: {
@@ -98,9 +99,11 @@ ${article.plainText}`;
       console.log("✅ iframe起動完了");
     } else {
       // フォールバック: 別タブで開く
-      const imageGenUrl =
-        import.meta.env.VITE_IMAGE_GEN_URL ||
-        "http://localhost:5177";
+      const imageGenUrl = getImageAgentUrl();
+      if (!imageGenUrl) {
+        alert("画像生成エージェントURLが未設定です。");
+        return;
+      }
       const imageGenOrigin = new URL(imageGenUrl).origin;
 
       console.log(`🚀 AI Article Imager for WordPressを開きます: ${imageGenUrl}`);

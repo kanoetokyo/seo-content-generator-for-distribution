@@ -767,6 +767,17 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     message: "スクレイピングサーバーは正常に動作しています",
+    features: {
+      gemini: Boolean(process.env.GEMINI_API_KEY),
+      googleSearch: Boolean(GOOGLE_API_KEY && SEARCH_ENGINE_ID),
+      serper: Boolean(process.env.SERPER_API_KEY),
+      spreadsheet: Boolean(process.env.SPREADSHEET_ID),
+      wordpress: Boolean(
+        process.env.WP_BASE_URL &&
+          process.env.WP_USERNAME &&
+          process.env.WP_APP_PASSWORD
+      ),
+    },
   });
 });
 
@@ -1286,19 +1297,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// プロセスエラーハンドリング
-process.on("uncaughtException", (err) => {
-  console.error("❌ Uncaught Exception:", err);
-  process.exit(1);
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
-  process.exit(1);
-});
-
-// サーバー起動
-const server = app.listen(PORT, "0.0.0.0", () => {
+function logStartup() {
   console.log(`
 🎉 スクレイピングサーバー起動完了！
 📡 URL: http://localhost:${PORT}
@@ -1337,13 +1336,31 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   }
 
   console.log("🔥 SERVER IS READY TO RECEIVE REQUESTS!");
-});
+}
 
-// 終了時の処理
-process.on("SIGINT", async () => {
-  console.log("\n👋 サーバーを終了します...");
-  if (browser) {
-    await browser.close();
-  }
-  process.exit(0);
-});
+if (require.main === module) {
+  // プロセスエラーハンドリング
+  process.on("uncaughtException", (err) => {
+    console.error("❌ Uncaught Exception:", err);
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason, promise) => {
+    console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
+    process.exit(1);
+  });
+
+  // サーバー起動
+  app.listen(PORT, "0.0.0.0", logStartup);
+
+  // 終了時の処理
+  process.on("SIGINT", async () => {
+    console.log("\n👋 サーバーを終了します...");
+    if (browser) {
+      await browser.close();
+    }
+    process.exit(0);
+  });
+}
+
+module.exports = app;

@@ -34,6 +34,7 @@ import LoadingSpinner from "./LoadingSpinner";
 import { slackNotifier } from "../services/slackNotificationService";
 import { extractCautionNotes } from "../utils/extractCautionNotes";
 import { generateSlug } from "../services/slugGenerator";
+import { getImageAgentUrl } from "../utils/imageAgentUrl";
 
 /**
  * Issueオブジェクトのoriginalフィールドを安全に文字列化
@@ -1964,9 +1965,11 @@ ${
         console.log("  4. Slug自動設定");
       } else {
         // フォールバック: 別タブで開く
-        const imageGenUrl =
-          import.meta.env.VITE_IMAGE_GEN_URL ||
-          "http://localhost:5177";
+        const imageGenUrl = getImageAgentUrl();
+        if (!imageGenUrl) {
+          alert("画像生成エージェントURLが未設定です。");
+          return;
+        }
         const newWindow = window.open(imageGenUrl, "_blank");
 
         if (newWindow) {
@@ -3022,9 +3025,11 @@ const startImageGeneration = async (
       console.log("✅ iframe起動完了");
     } else {
       // フォールバック: 別タブで開く
-      const imageGenUrl =
-        import.meta.env.VITE_IMAGE_GEN_URL ||
-        "http://localhost:5177";
+      const imageGenUrl = getImageAgentUrl();
+      if (!imageGenUrl) {
+        alert("画像生成エージェントURLが未設定です。");
+        return;
+      }
       const newWindow = window.open(imageGenUrl, "_blank");
 
       if (newWindow) {

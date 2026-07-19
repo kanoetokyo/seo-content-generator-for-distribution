@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { SearchIcon } from "./icons";
 import { SpreadsheetModeToggle } from "./SpreadsheetModeToggle";
 import { SpreadsheetDataViewer } from "./SpreadsheetDataViewer";
+import { getImageAgentUrl } from "../utils/imageAgentUrl";
 
 interface SpreadsheetKeyword {
   row: number;
@@ -46,8 +47,9 @@ const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
   console.log("  apiBaseUrl prop:", apiBaseUrl);
   console.log("  Final apiBaseUrl:", apiBaseUrl);
 
+  const imageAgentUrl = getImageAgentUrl();
   const [keyword, setKeyword] = useState("");
-  const [includeImages, setIncludeImages] = useState(true);
+  const [includeImages, setIncludeImages] = useState(Boolean(imageAgentUrl));
   const [isFullAutoMode, setIsFullAutoMode] = useState(false); // フル自動モードの状態
   const [isSpreadsheetMode, setIsSpreadsheetMode] = useState(false); // スプレッドシートモード
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
@@ -223,11 +225,39 @@ const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
                 {isFullAutoMode ? "自動実行中..." : "分析中..."}
               </>
             ) : (
-              <>{isFullAutoMode ? "フル自動で開始" : "構成"}</>
+              <>{isFullAutoMode ? "フル自動で開始" : "構成案を作成"}</>
             )}
           </button>
         )}
       </form>
+
+      <label
+        htmlFor="includeImages"
+        className={`flex items-start gap-3 rounded-lg border p-4 ${
+          imageAgentUrl
+            ? "border-gray-200 bg-white"
+            : "border-amber-200 bg-amber-50"
+        }`}
+      >
+        <input
+          id="includeImages"
+          type="checkbox"
+          checked={includeImages}
+          onChange={(e) => setIncludeImages(e.target.checked)}
+          disabled={isLoading || !imageAgentUrl}
+          className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+        />
+        <span>
+          <span className="block text-sm font-semibold text-gray-800">
+            記事作成後に画像生成エージェントも開く
+          </span>
+          <span className="mt-1 block text-xs leading-relaxed text-gray-500">
+            {imageAgentUrl
+              ? "本文生成後、アイキャッチや見出し画像の作成へ進めます。"
+              : "画像生成エージェントのURLが未設定のため、本文作成までを実行します。"}
+          </span>
+        </span>
+      </label>
 
       {/* 無料枠超過警告の表示 */}
       {apiUsageWarning && (
