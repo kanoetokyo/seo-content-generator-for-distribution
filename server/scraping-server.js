@@ -12,6 +12,11 @@ const puppeteer =
 const fetch = require("node-fetch");
 const path = require("path");
 const chromium = isVercel ? require("@sparticuz/chromium-min") : null;
+const {
+  createNotionArticle,
+  NotionPublisherError,
+  uploadImageToNotion,
+} = require("./notion-publisher.cjs");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
@@ -121,7 +126,7 @@ const authenticate = (req, res, next) => {
     `🔐 API Key provided: ${req.headers["x-api-key"] ? "YES" : "NO"}`
   );
 
-  // ヘルスチェックとWordPress設定取得は認証不要
+  // ヘルスチェックと旧WordPress設定取得は認証不要
   if (req.path === "/health" || req.path === "/wordpress/config") {
     console.log(`🔐 ${req.path} - skipping auth`);
     return next();
@@ -830,6 +835,9 @@ app.get("/api/health", (req, res) => {
       googleSearch: USE_GOOGLE_SEARCH,
       serper: USE_SERPER,
       spreadsheet: Boolean(process.env.SPREADSHEET_ID),
+      notion: Boolean(
+        process.env.NOTION_API_KEY && process.env.NOTION_BLOG_DATA_SOURCE_ID
+      ),
       wordpress: Boolean(
         process.env.WP_BASE_URL &&
           process.env.WP_USERNAME &&
@@ -1131,6 +1139,83 @@ app.post("/api/slack-notify", async (req, res) => {
   }
 });
 
+// Notionブログ記事作成エンドポイント
+app.post("/api/notion/upload-image", async (req, res) => {
+  const { base64Image, h2Text, altText } = req.body || {};
+
+  if (!base64Image) {
+    return res.status(400).json({ error: "画像データが必要です。" });
+  }
+
+  if (!process.env.NOTION_API_KEY) {
+    return res.status(503).json({
+      error: "Notion連携が未設定です。NOTION_API_KEY を設定してください。",
+    });
+  }
+
+  try {
+    const image = await uploadImageToNotion(
+      process.env.NOTION_API_KEY,
+      { base64Image, h2Text, altText },
+      Number(req.body?.index) || 0
+    );
+    res.status(201).json({ success: true, image });
+  } catch (error) {
+    const statusCode =
+      error instanceof NotionPublisherError ? error.status : 500;
+    console.error("❌ Notion画像アップロードエラー:", error.message);
+    res.status(statusCode).json({
+      error:
+        error instanceof NotionPublisherError
+          ? error.message
+          : "Notionへの画像保存に失敗しました。",
+    });
+  }
+});
+
+app.post("/api/notion/create-article", async (req, res) => {
+  const {
+    title,
+    content,
+    slug,
+    summary,
+    keyword,
+    status,
+    images,
+  } = req.body || {};
+
+  try {
+    const article = await createNotionArticle({
+      token: process.env.NOTION_API_KEY,
+      dataSourceId: process.env.NOTION_BLOG_DATA_SOURCE_ID,
+      title,
+      content,
+      slug,
+      summary,
+      keyword,
+      status: status || process.env.NOTION_BLOG_DEFAULT_STATUS || "draft",
+      images: Array.isArray(images) ? images : [],
+      authorName:
+        process.env.NOTION_BLOG_DEFAULT_AUTHOR || "勅使河原　将",
+      shopSlug: process.env.NOTION_BLOG_DEFAULT_SHOP_SLUG || "corporate",
+    });
+
+    console.log(
+      `✅ Notion記事を作成しました: ${article.id} (${article.status}, ${article.imageCount} images)`
+    );
+    res.status(201).json({ success: true, article });
+  } catch (error) {
+    const statusCode =
+      error instanceof NotionPublisherError ? error.status : 500;
+    const message =
+      error instanceof NotionPublisherError
+        ? error.message
+        : "Notionへの記事保存に失敗しました。";
+    console.error("❌ Notion記事作成エラー:", error.message);
+    res.status(statusCode).json({ error: message });
+  }
+});
+
 // WordPress 設定取得エンドポイント
 app.get("/api/wordpress/config", (req, res) => {
   console.log("📋 WordPress設定を取得中...");
@@ -1429,6 +1514,8 @@ function logStartup() {
    - POST /api/google-search (Google検索)
    - GET /api/company-data (Google Drive実績データ)
    - POST /api/slack-notify (Slack通知プロキシ)
+   - POST /api/notion/upload-image (Notion画像保存)
+   - POST /api/notion/create-article (Notion記事作成)
    - GET /api/wordpress/config (WordPress設定取得)
    - POST /api/wordpress/upload-image (WordPress画像アップロード)
    - POST /api/wordpress/create-post (WordPress記事作成)

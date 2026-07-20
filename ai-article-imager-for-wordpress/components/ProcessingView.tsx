@@ -174,7 +174,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initia
                         disabled={isProcessingAll}
                         className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-gray-400"
                     >
-                        {isProcessingAll ? `順次処理中... (${completedCount}/${sections.filter(s => s.status !== 'skipped').length})` : '全画像を順次生成'}
+                        {isProcessingAll ? `順次処理中... (${completedCount}/${sections.length})` : '全画像を順次生成'}
                     </button>
                     <button
                         onClick={handleProceedToReport}

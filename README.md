@@ -20,7 +20,7 @@
 - 構成をもとに記事を自動執筆
 - 記事の校正・ファクトチェック
 - 記事に合った画像をAIで自動生成
-- 完成した記事をWordPressに自動投稿
+- 完成した記事と画像をNotionのブログ記事データベースに保存
 - Googleスプレッドシートと連携して記事を一括作成
 
 ---
@@ -104,11 +104,30 @@ VITE_GOOGLE_SEARCH_ENGINE_ID=ここにも同じIDを貼り付け
 # 【代替】Custom Search APIが使えない場合はSerper APIを設定
 # SERPER_API_KEY=ここにSerper APIキーを貼り付け
 
-# バックエンド認証（競合調査/スプレッドシート/Slack/WordPress連携などで使用）
+# バックエンド認証（競合調査/スプレッドシート/Slack/Notion連携などで使用）
 # 例）openssl rand -hex 32 で生成した値を貼り付け
 INTERNAL_API_KEY=任意の長いランダム文字列
 VITE_INTERNAL_API_KEY=ここにも同じ値を貼り付け
+
+# Notionブログ連携（画像生成した記事の保存先）
+# Notionで作成したIntegrationのシークレットを設定し、ブログ記事DBを共有してください。
+NOTION_API_KEY=ここにNotion Integrationのシークレットを貼り付け
+NOTION_BLOG_DATA_SOURCE_ID=ここにブログ記事データソースIDを貼り付け
+NOTION_BLOG_DEFAULT_STATUS=draft
+NOTION_BLOG_DEFAULT_AUTHOR=勅使河原　将
+NOTION_BLOG_DEFAULT_SHOP_SLUG=corporate
 ```
+
+#### Notionブログ連携の準備
+
+画像生成エージェントで作成した記事は、Notionの **ブログ記事 (blogs)** データベースへ保存されます。Notion API用のIntegrationを1つ作成し、対象データベースへ接続してください。
+
+1. [Notion Integrations](https://www.notion.so/profile/integrations) で「New integration」を作成し、Content Capabilities の **Insert Content** を有効にします。
+2. 表示されたIntegration Secretを `NOTION_API_KEY` に設定します。Secretはブラウザ側に公開される `VITE_` 付きの変数には入れません。
+3. Notionで「ブログ記事 (blogs)」データベースを開き、右上の `...` → `接続` から作成したIntegrationを追加します。
+4. `NOTION_BLOG_DATA_SOURCE_ID` には `01b356e3-01fc-4af5-a859-e817084b2a43` を設定します。
+
+保存時には `title`、`slug`、`summary`、`status`、`published_at`、`author_name`、`category_name`、`category_slug`、`shop_slugs` を設定し、記事本文と生成画像はNotionページ本文へ保存します。カテゴリは記事内容から自動判定し、判定できない場合は「お掃除豆知識 / tips」として保存します。
 
 3. ファイルを保存して閉じます
 
