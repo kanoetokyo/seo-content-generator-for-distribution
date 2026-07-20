@@ -113,7 +113,7 @@ VITE_INTERNAL_API_KEY=ここにも同じ値を貼り付け
 # Notionで作成したIntegrationのシークレットを設定し、ブログ記事DBを共有してください。
 NOTION_API_KEY=ここにNotion Integrationのシークレットを貼り付け
 NOTION_BLOG_DATA_SOURCE_ID=ここにブログ記事データソースIDを貼り付け
-NOTION_BLOG_DEFAULT_STATUS=draft
+NOTION_BLOG_DEFAULT_STATUS=published
 NOTION_BLOG_DEFAULT_AUTHOR=勅使河原　将
 NOTION_BLOG_DEFAULT_SHOP_SLUG=corporate
 ```
