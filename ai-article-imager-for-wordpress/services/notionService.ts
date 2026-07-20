@@ -9,7 +9,8 @@ const getAuthHeaders = () => {
 };
 
 interface UploadedNotionImage {
-  h2Text: string;
+  heading: string;
+  headingIndex: number;
   altText: string;
   fileUploadId: string;
 }
@@ -42,7 +43,8 @@ async function request<T>(path: string, body: Record<string, unknown>): Promise<
 
 export async function uploadImageToNotion(
   section: H2Section,
-  index: number
+  index: number,
+  headingIndex: number
 ): Promise<UploadedNotionImage> {
   const data = await request<{ image: UploadedNotionImage }>(
     "/notion/upload-image",
@@ -51,6 +53,7 @@ export async function uploadImageToNotion(
       h2Text: section.h2Text,
       altText: section.altText,
       index,
+      headingIndex,
     }
   );
   return data.image;

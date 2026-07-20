@@ -1141,7 +1141,7 @@ app.post("/api/slack-notify", async (req, res) => {
 
 // Notionブログ記事作成エンドポイント
 app.post("/api/notion/upload-image", async (req, res) => {
-  const { base64Image, h2Text, altText } = req.body || {};
+  const { base64Image, h2Text, altText, headingIndex } = req.body || {};
 
   if (!base64Image) {
     return res.status(400).json({ error: "画像データが必要です。" });
@@ -1156,7 +1156,15 @@ app.post("/api/notion/upload-image", async (req, res) => {
   try {
     const image = await uploadImageToNotion(
       process.env.NOTION_API_KEY,
-      { base64Image, h2Text, altText },
+      {
+        base64Image,
+        h2Text,
+        altText,
+        headingIndex:
+          Number.isInteger(headingIndex) && headingIndex >= 0
+            ? headingIndex
+            : undefined,
+      },
       Number(req.body?.index) || 0
     );
     res.status(201).json({ success: true, image });
