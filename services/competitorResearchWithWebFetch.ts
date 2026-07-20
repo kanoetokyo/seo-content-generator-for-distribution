@@ -514,7 +514,7 @@ JSONで返してください：
   } catch (error: any) {
     console.error("❌ Error in competitor research:", error);
 
-    // ネットワークエラーやサーバーエラーの場合はフォールバック
+    // ネットワークエラーやサーバーエラーは、環境固有の内部エラーを出さずに案内する
     const isNetworkError =
       error?.message?.includes("fetch") ||
       error?.message?.includes("Failed to fetch") ||
@@ -527,9 +527,9 @@ JSONで返してください：
       error?.message?.includes("Puppeteerによるページ取得に失敗");
 
     if (isNetworkError) {
-      console.log("🔄 ネットワークエラー検出、Render自動復旧を試行");
-      console.log("🔍 エラー詳細:", error?.message);
-      throw new Error("RENDER_RESTART_REQUIRED");
+      throw new Error(
+        "競合サイトの取得に失敗しました。しばらくしてからもう一度実行してください。"
+      );
     }
 
     throw new Error(`競合分析エラー: ${error?.message || String(error)}`);

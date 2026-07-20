@@ -5,14 +5,13 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-// 環境に応じてPuppeteerパッケージを使い分け
+const isVercel = Boolean(process.env.VERCEL);
+// Vercelでは軽量版、ローカルではChromium同梱版を使用する
 const puppeteer =
-  process.env.NODE_ENV === "production"
-    ? require("puppeteer-core") // 本番環境：軽量版
-    : require("puppeteer"); // 開発環境：Chromium付き
+  isVercel ? require("puppeteer-core") : require("puppeteer");
 const fetch = require("node-fetch");
 const path = require("path");
-const chromium = require("@sparticuz/chromium");
+const chromium = isVercel ? require("@sparticuz/chromium-min") : null;
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
@@ -180,8 +179,11 @@ function mapSerperOrganicResult(item) {
   };
 }
 
-// ブラウザインスタンスを保持（高速化のため）
+// ブラウザインスタンスと起動中のPromiseを保持して、同時起動を防ぐ
 let browser = null;
+let browserLaunchPromise = null;
+let chromiumPath = null;
+let chromiumPathPromise = null;
 
 // 記事完了ベースの再起動カウンター
 let articlesCompleted = 0;
@@ -252,72 +254,110 @@ function logMemoryUsage(context = "") {
   }
 }
 
+function getChromiumPackUrl() {
+  if (process.env.CHROMIUM_PACK_URL) {
+    return process.env.CHROMIUM_PACK_URL;
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}/chromium-pack.tar`;
+  }
+
+  throw new Error("Chromium pack URL is not configured");
+}
+
+async function getVercelChromiumPath() {
+  if (chromiumPath) return chromiumPath;
+
+  if (!chromiumPathPromise) {
+    chromium.setGraphicsMode = false;
+    chromiumPathPromise = chromium
+      .executablePath(getChromiumPackUrl())
+      .then((resolvedPath) => {
+        chromiumPath = resolvedPath;
+        return resolvedPath;
+      })
+      .catch((error) => {
+        chromiumPathPromise = null;
+        throw error;
+      });
+  }
+
+  return chromiumPathPromise;
+}
+
+async function launchBrowser() {
+  if (isVercel) {
+    const executablePath = await getVercelChromiumPath();
+    return puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath,
+      headless: true,
+      ignoreHTTPSErrors: true,
+      protocolTimeout: 60000,
+    });
+  }
+
+  return puppeteer.launch({
+    headless: true,
+    ignoreHTTPSErrors: true,
+    protocolTimeout: 60000,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--disable-gpu",
+    ],
+  });
+}
+
 // ブラウザを起動
 async function initBrowser() {
   logMemoryUsage("ブラウザ起動前");
-  // 既存のブラウザインスタンスのチェックはそのまま
   if (browser) {
     try {
       await browser.version();
-      return browser; // 正常ならそのまま返す
+      return browser;
     } catch (e) {
       console.log("⚠️ ブラウザが閉じていたため再起動します");
       browser = null;
     }
   }
 
-  if (!browser) {
-    const isProduction = process.env.NODE_ENV === "production";
-
-    if (isProduction) {
-      // 本番環境：@sparticuz/chromium を使用
-      console.log("🚀 Puppeteer (with @sparticuz/chromium) を起動中...");
-      try {
-        browser = await puppeteer.launch({
-          args: chromium.args,
-          defaultViewport: chromium.defaultViewport,
-          executablePath: await chromium.executablePath(),
-          headless: chromium.headless,
-          ignoreHTTPSErrors: true,
-          protocolTimeout: 60000, // 60秒のタイムアウト
+  if (!browserLaunchPromise) {
+    console.log(
+      `🚀 Puppeteer (${isVercel ? "Vercel Chromium" : "開発環境"}) を起動中...`
+    );
+    browserLaunchPromise = launchBrowser()
+      .then((launchedBrowser) => {
+        browser = launchedBrowser;
+        browser.on("disconnected", () => {
+          if (browser === launchedBrowser) browser = null;
         });
-        console.log("✅ @sparticuz/chromium ブラウザ起動完了");
-        const browserVersion = await browser.version();
-        console.log(`✅ 使用中のブラウザ: ${browserVersion}`);
-        logMemoryUsage("ブラウザ起動後");
-      } catch (error) {
-        console.error("❌ @sparticuz/chromium 起動エラー:", error);
-        return null;
-      }
-    } else {
-      // 開発環境：通常のpuppeteer を使用
-      console.log("🚀 Puppeteer (開発環境) を起動中...");
-      try {
-        browser = await puppeteer.launch({
-          headless: true,
-          ignoreHTTPSErrors: true,
-          protocolTimeout: 60000, // 60秒のタイムアウト
-          args: [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-accelerated-2d-canvas",
-            "--no-first-run",
-            "--no-zygote",
-            "--disable-gpu",
-          ],
-        });
-        console.log("✅ 開発環境ブラウザ起動完了");
-        const browserVersion = await browser.version();
-        console.log(`✅ 使用中のブラウザ: ${browserVersion}`);
-        logMemoryUsage("ブラウザ起動後");
-      } catch (error) {
-        console.error("❌ 開発環境Puppeteer起動エラー:", error);
-        return null;
-      }
-    }
+        return browser.version().then(() => browser);
+      })
+      .catch((error) => {
+        browser = null;
+        throw error;
+      })
+      .finally(() => {
+        browserLaunchPromise = null;
+      });
   }
-  return browser;
+
+  try {
+    const launchedBrowser = await browserLaunchPromise;
+    console.log("✅ Puppeteerブラウザ起動完了");
+    logMemoryUsage("ブラウザ起動後");
+    return launchedBrowser;
+  } catch (error) {
+    console.error("❌ Puppeteer起動エラー:", error);
+    return null;
+  }
 }
 
 // スクレイピング処理
@@ -416,7 +456,8 @@ async function scrapeHeadings(url) {
     }
 
     // ページにアクセス（タイムアウト時間を環境変数で制御）
-    const TIMEOUT_MS = parseInt(process.env.TIMEOUT_MS) || 60000; // デフォルト60秒に短縮
+    const TIMEOUT_MS =
+      parseInt(process.env.TIMEOUT_MS) || (isVercel ? 15000 : 60000);
     console.log(`⏰ タイムアウト設定: ${TIMEOUT_MS / 1000}秒`);
 
     // ページアクセスを安全に実行
@@ -435,7 +476,7 @@ async function scrapeHeadings(url) {
         console.log(`⚠️ 初回アクセス失敗、再試行中: ${gotoError.message}`);
         await page.goto(url, {
           waitUntil: "load", // より緩い条件で再試行
-          timeout: 30000, // 30秒で再試行
+          timeout: isVercel ? 5000 : 30000,
         });
         console.log(`✅ 再試行でページアクセス成功: ${url}`);
       } else {
@@ -616,7 +657,8 @@ app.post("/api/scrape-multiple", async (req, res) => {
     console.log(`📋 ${urls.length}件のURLをスクレイピング開始`);
 
     // 🚀 並列処理数を環境変数で制御（メモリ効率重視）
-    const CONCURRENT_LIMIT = parseInt(process.env.CONCURRENT_LIMIT) || 3;
+    const CONCURRENT_LIMIT =
+      parseInt(process.env.CONCURRENT_LIMIT) || (isVercel ? 2 : 3);
     console.log(`🔧 並列処理数: ${CONCURRENT_LIMIT}個（メモリ効率重視）`);
 
     // メモリ使用量を監視
