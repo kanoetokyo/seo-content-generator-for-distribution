@@ -259,11 +259,7 @@ function getChromiumPackUrl() {
     return process.env.CHROMIUM_PACK_URL;
   }
 
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}/chromium-pack.tar`;
-  }
-
-  throw new Error("Chromium pack URL is not configured");
+  return "https://github.com/Sparticuz/chromium/releases/download/v141.0.0/chromium-v141.0.0-pack.x64.tar";
 }
 
 async function getVercelChromiumPath() {
