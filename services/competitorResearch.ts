@@ -181,7 +181,7 @@ export const generateCompetitorResearch = async (keyword: string): Promise<Compe
     // エラーハンドリング
     if (error?.message) {
       if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-        throw new Error('API認証エラー: APIキーが無効です。');
+        throw new Error('内部API認証エラー: .env の INTERNAL_API_KEY / VITE_INTERNAL_API_KEY を確認し、サーバーを再起動してください。');
       }
       if (error.message.includes('429')) {
         throw new Error('レート制限エラー: しばらくしてから再度お試しください。');

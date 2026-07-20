@@ -154,11 +154,31 @@ app.use("/api", authenticate);
 app.use("/api", apiLimiter);
 
 // Google Search API設定
+const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const GOOGLE_API_KEY =
   process.env.GOOGLE_API_KEY || process.env.VITE_GOOGLE_API_KEY;
 const SEARCH_ENGINE_ID =
   process.env.GOOGLE_SEARCH_ENGINE_ID ||
   process.env.VITE_GOOGLE_SEARCH_ENGINE_ID;
+const USE_SERPER = Boolean(SERPER_API_KEY);
+const USE_GOOGLE_SEARCH = Boolean(GOOGLE_API_KEY && SEARCH_ENGINE_ID);
+
+function getDisplayLink(link) {
+  try {
+    return new URL(link).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function mapSerperOrganicResult(item) {
+  return {
+    title: item.title,
+    link: item.link,
+    snippet: item.snippet || "",
+    displayLink: item.displayedLink || getDisplayLink(item.link),
+  };
+}
 
 // ブラウザインスタンスを保持（高速化のため）
 let browser = null;
@@ -769,8 +789,8 @@ app.get("/api/health", (req, res) => {
     message: "スクレイピングサーバーは正常に動作しています",
     features: {
       gemini: Boolean(process.env.GEMINI_API_KEY),
-      googleSearch: Boolean(GOOGLE_API_KEY && SEARCH_ENGINE_ID),
-      serper: Boolean(process.env.SERPER_API_KEY),
+      googleSearch: USE_GOOGLE_SEARCH,
+      serper: USE_SERPER,
       spreadsheet: Boolean(process.env.SPREADSHEET_ID),
       wordpress: Boolean(
         process.env.WP_BASE_URL &&
@@ -886,14 +906,76 @@ app.post("/api/google-search", async (req, res) => {
     return res.status(400).json({ error: "Query is required" });
   }
 
-  if (!GOOGLE_API_KEY || !SEARCH_ENGINE_ID) {
-    console.error("Google Search API keys not configured");
-    return res.status(500).json({ error: "Google Search API not configured" });
+  if (!USE_SERPER && !USE_GOOGLE_SEARCH) {
+    console.error(
+      "検索APIが未設定です（SERPER_API_KEY または GOOGLE_API_KEY + GOOGLE_SEARCH_ENGINE_ID が必要）"
+    );
+    return res.status(500).json({
+      error:
+        "検索APIが設定されていません。SERPER_API_KEY または GOOGLE_API_KEY + GOOGLE_SEARCH_ENGINE_ID を .env に設定してください。",
+    });
   }
 
   try {
-    console.log(`🔍 Google Search for: ${query}`);
     const results = [];
+
+    if (USE_SERPER) {
+      console.log(`🔍 Serper Search for: ${query}`);
+
+      const firstResponse = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: {
+          "X-API-KEY": SERPER_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ q: query, num: 10, gl: "jp", hl: "ja" }),
+      });
+
+      if (!firstResponse.ok) {
+        const errorData = await firstResponse.json().catch(() => ({}));
+        console.error("Serper API error:", errorData);
+        return res.status(firstResponse.status).json({
+          error:
+            process.env.NODE_ENV === "production"
+              ? "Search service error"
+              : errorData.message || "Serper API error",
+        });
+      }
+
+      const firstData = await firstResponse.json();
+      if (firstData.organic) {
+        results.push(...firstData.organic.map(mapSerperOrganicResult));
+      }
+
+      if (numResults > 10 && results.length >= 10) {
+        const secondResponse = await fetch("https://google.serper.dev/search", {
+          method: "POST",
+          headers: {
+            "X-API-KEY": SERPER_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            q: query,
+            num: 10,
+            page: 2,
+            gl: "jp",
+            hl: "ja",
+          }),
+        });
+
+        if (secondResponse.ok) {
+          const secondData = await secondResponse.json();
+          if (secondData.organic) {
+            results.push(...secondData.organic.map(mapSerperOrganicResult));
+          }
+        }
+      }
+
+      console.log(`✅ Serper Search completed: ${results.length} results`);
+      return res.json({ success: true, results: results.slice(0, numResults) });
+    }
+
+    console.log(`🔍 Google Custom Search for: ${query}`);
 
     // 1回目のリクエスト（1-10位）
     // 日本語・日本地域の検索結果を優先
@@ -933,15 +1015,15 @@ app.post("/api/google-search", async (req, res) => {
       }
     }
 
-    console.log(`✅ Google Search completed: ${results.length} results`);
+    console.log(`✅ Google Custom Search completed: ${results.length} results`);
     res.json({ success: true, results });
   } catch (error) {
-    console.error("Google Search error:", error.message);
+    console.error("Search error:", error.message);
     res.status(500).json({
       error:
         process.env.NODE_ENV === "production"
           ? "Internal server error"
-          : "Failed to perform Google search",
+          : "Failed to perform search",
     });
   }
 });
@@ -1317,12 +1399,18 @@ function logStartup() {
   `);
 
   // Google Search API設定の確認（APIキーはマスク）
-  if (GOOGLE_API_KEY && SEARCH_ENGINE_ID) {
+  if (USE_SERPER) {
+    console.log("✅ Serper Search API: 設定済み");
+    console.log("   - API Key: ****");
+  } else if (USE_GOOGLE_SEARCH) {
     console.log("✅ Google Custom Search API: 設定済み");
     console.log("   - API Key: ****");
     console.log(`   - Search Engine ID: ${SEARCH_ENGINE_ID}`);
   } else {
-    console.log("⚠️  Google Custom Search API: 未設定");
+    console.log("⚠️  競合検索API: 未設定");
+    console.log(
+      "   - SERPER_API_KEY または GOOGLE_API_KEY + GOOGLE_SEARCH_ENGINE_ID を設定してください"
+    );
     if (!GOOGLE_API_KEY) console.log("   - GOOGLE_API_KEY が見つかりません");
     if (!SEARCH_ENGINE_ID)
       console.log("   - GOOGLE_SEARCH_ENGINE_ID が見つかりません");
