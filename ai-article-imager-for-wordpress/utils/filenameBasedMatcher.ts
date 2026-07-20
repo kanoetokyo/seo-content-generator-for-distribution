@@ -319,7 +319,6 @@ async function calculateSemanticSimilarity(
 ): Promise<number> {
   try {
     const genAI = new GoogleGenAI({ apiKey });
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
 以下のファイル名とH2見出しの意味的な関連度を0-1のスコアで評価してください。
@@ -337,7 +336,10 @@ H2見出し: ${h2Text}
 
 スコア:`;
 
-    const result = await model.generateContent({ contents: prompt });
+    const result = await genAI.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+    });
     const score = parseFloat(result.text.trim());
 
     return isNaN(score) ? 0 : Math.min(1, Math.max(0, score));
