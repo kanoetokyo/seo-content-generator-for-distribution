@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
     const localEnv = loadEnv(mode, '.', '');
     const env = { ...parentEnv, ...localEnv, ...process.env };
     const geminiApiKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || '';
+    const apiUrl = env.VITE_API_URL || 'http://localhost:3001/api';
     
     return {
       plugins: [react()],
@@ -16,6 +17,13 @@ export default defineConfig(({ mode }) => {
         host: true,
         fs: {
           strict: false
+        },
+        proxy: {
+          '/api': {
+            target: 'http://localhost:3001',
+            changeOrigin: true,
+            secure: false
+          }
         }
       },
       assetsInclude: ['**/*.png', '**/*.jpg', '**/*.jpeg'],
@@ -24,13 +32,9 @@ export default defineConfig(({ mode }) => {
         'process.env.GEMINI_API_KEY': JSON.stringify(geminiApiKey),
         'process.env.API_KEY_2': JSON.stringify(env.GEMINI_API_KEY_2 || ''),
         'process.env.API_KEY_3': JSON.stringify(env.GEMINI_API_KEY_3 || ''),
-        // APIサーバーのURL（認証情報はサーバー側で管理）
-        'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || 'http://localhost:3001/api'),
+        // APIサーバーのURL（Notion連携はサーバー側で管理）
+        'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
         'import.meta.env.VITE_INTERNAL_API_KEY': JSON.stringify(env.VITE_INTERNAL_API_KEY),
-        // WordPress設定（認証情報はサーバー側で管理、デフォルト値のみ）
-        'import.meta.env.VITE_WP_DEFAULT_POST_STATUS': JSON.stringify(
-          env.WP_DEFAULT_POST_STATUS || env.VITE_WP_DEFAULT_POST_STATUS || 'draft'
-        )
       },
       resolve: {
         alias: {

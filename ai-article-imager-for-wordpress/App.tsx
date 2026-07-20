@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { WPConfig, PostConfig, H2Section, AppState, ReportLog } from "./types";
+import { NotionPostConfig, H2Section, AppState, ReportLog } from "./types";
 import { extractH1Title } from "./utils/parsers";
 import {
   parseHtmlWithIntelligentMatching,
@@ -21,7 +21,6 @@ import {
   PhotoIcon,
   ArrowRightIcon,
 } from "./components/icons";
-import { TestSlackButton } from "./components/TestSlackButton";
 
 // 外部から記事データを受け取るためのインターフェース
 interface ArticleData {
@@ -40,72 +39,13 @@ interface AppProps {
 const App: React.FC<AppProps> = ({ initialArticleData }) => {
   const [appState, setAppState] = useState<AppState>(AppState.CONFIG);
 
-  // 環境変数から初期値を読み込む（認証情報はサーバー側で管理）
-  console.log("🔧 環境変数の読み込み状況:");
-  console.log("  VITE_API_URL:", import.meta.env.VITE_API_URL);
-  console.log(
-    "  VITE_WP_DEFAULT_POST_STATUS:",
-    import.meta.env.VITE_WP_DEFAULT_POST_STATUS
-  );
-
-  // WordPress設定（認証情報はサーバー側で管理、UIは空欄だが機能は正常）
-  const [wpConfig, setWpConfig] = useState<WPConfig>({
-    base: "",
-    user: "",
-    app_password: "",
-  });
-  const [postConfig, setPostConfig] = useState<PostConfig>({
+  const [postConfig, setPostConfig] = useState<NotionPostConfig>({
     title: "AI Generated Article", // 記事データから自動的に設定される
-    status:
-      (import.meta.env.VITE_WP_DEFAULT_POST_STATUS as "draft" | "publish") ||
-      "draft",
+    status: "draft",
   });
   const [promptStyle, setPromptStyle] = useState<string>(
     "Simple and clean illustration style"
   );
-
-  // WordPress設定をサーバーから取得
-  useEffect(() => {
-    const fetchWpConfig = async () => {
-      try {
-        const apiUrl =
-          import.meta.env.VITE_API_URL || "http://localhost:3001/api";
-        const apiKey = import.meta.env.VITE_INTERNAL_API_KEY || "";
-        const response = await fetch(`${apiUrl}/wordpress/config`, {
-          headers: {
-            "x-api-key": apiKey,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const config = await response.json();
-
-        console.log("✅ WordPress設定を取得しました:", {
-          baseUrl: config.baseUrl,
-          username: config.username,
-          defaultPostStatus: config.defaultPostStatus,
-        });
-
-        setWpConfig({
-          base: config.baseUrl || "",
-          user: config.username || "",
-          app_password: "", // 空（サーバー側で管理）
-        });
-
-        setPostConfig((prev) => ({
-          ...prev,
-          status: config.defaultPostStatus || "draft",
-        }));
-      } catch (error) {
-        console.error("❌ WordPress設定の取得に失敗:", error);
-      }
-    };
-
-    fetchWpConfig();
-  }, []);
 
   // localStorageから記事データを取得
   const storedArticleData =
@@ -673,8 +613,6 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
               </div>
             </div>
             <ConfigForm
-              wpConfig={wpConfig}
-              setWpConfig={setWpConfig}
               postConfig={postConfig}
               setPostConfig={setPostConfig}
               promptStyle={promptStyle}
@@ -807,7 +745,6 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
               sections={processedSections}
               articleHtml={articleHtml}
               postConfig={postConfig}
-              wpConfig={wpConfig}
               metaData={articleMetaData}
               autoExecute={autoExecuteRef.current}
             />
@@ -823,11 +760,10 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-            AI Article Imager for WordPress
+            SEO記事画像・Notion入稿エージェント
           </h1>
           <p className="mt-1 text-gray-500">
-            Automate generating and inserting contextual images into your
-            articles.
+            記事に合う画像を生成し、Notionのブログ記事データベースへ保存します。
           </p>
         </div>
       </header>
@@ -835,11 +771,8 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
         {renderContent()}
       </main>
       <footer className="text-center py-4 text-sm text-gray-500">
-        <p>Built by a world-class senior frontend React engineer.</p>
+        <p>SEO記事生成エージェント</p>
       </footer>
-
-      {/* Slack通知テストボタン（開発用） */}
-      <TestSlackButton />
     </div>
   );
 };

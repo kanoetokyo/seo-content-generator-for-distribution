@@ -97,20 +97,20 @@ class SlackService {
   }
 
   /**
-   * WordPress入稿完了通知（メンション付き）
+   * Notion入稿完了通知（メンション付き）
    */
-  async notifyWordPressPostComplete(data: {
+  async notifyNotionArticleCreated(data: {
     title: string;
-    postUrl: string;
+    notionUrl: string;
     imageCount: number;
-    status?: "draft" | "publish";
+    status?: "draft" | "published";
     metaDescription?: string;
     slug?: string;
   }): Promise<void> {
-    const statusText = data.status === "publish" ? "公開済み" : "下書き保存";
+    const statusText = data.status === "published" ? "公開記事" : "下書き保存";
 
     const message: SlackMessage = {
-      text: `<@${this.MENTION_USER_ID}>\n📝 *WordPress投稿完了*`,
+      text: `<@${this.MENTION_USER_ID}>\n📝 *Notionブログ記事を作成*`,
       attachments: [
         {
           color: "good",
@@ -122,7 +122,7 @@ class SlackService {
             },
             {
               title: "URL",
-              value: data.postUrl,
+              value: data.notionUrl,
               short: false,
             },
             {
@@ -146,7 +146,7 @@ class SlackService {
               short: true,
             },
           ],
-          footer: "WordPress Publisher",
+          footer: "Notion Blog Publisher",
           ts: Math.floor(Date.now() / 1000),
         },
       ],

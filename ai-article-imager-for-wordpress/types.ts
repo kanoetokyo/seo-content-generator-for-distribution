@@ -1,13 +1,7 @@
 
-export interface WPConfig {
-  base: string;
-  user: string;
-  app_password: string;
-}
-
-export interface PostConfig {
+export interface NotionPostConfig {
   title: string;
-  status: 'draft' | 'publish';
+  status: 'draft' | 'published';
   slug?: string;
 }
 
