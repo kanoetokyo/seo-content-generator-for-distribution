@@ -152,7 +152,7 @@ JSON形式で返してください（必ず15件以上）：
     if (false) {
       console.log("📡 Using Gemini search (URLs may not be exact)...");
       const model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash-preview",
         tools: [{ googleSearch: {} }],
         generationConfig: {
           temperature: 0.1,
@@ -448,7 +448,7 @@ JSONで返してください：
 
     // Geminiモデルを初期化
     const topicsModel = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 2048,
@@ -514,24 +514,28 @@ JSONで返してください：
   } catch (error: any) {
     console.error("❌ Error in competitor research:", error);
 
-    // ネットワークエラーやサーバーエラーは、環境固有の内部エラーを出さずに案内する
-    const isNetworkError =
-      error?.message?.includes("fetch") ||
-      error?.message?.includes("Failed to fetch") ||
-      error?.message?.includes("TypeError") ||
-      error?.message?.includes("network") ||
-      error?.message?.includes("503") ||
-      error?.message?.includes("502") ||
-      error?.message?.includes("CORS") ||
-      error?.message?.includes("RENDER_SERVER_DOWN") ||
-      error?.message?.includes("Puppeteerによるページ取得に失敗");
+    const errorMessage = error?.message || String(error);
+    const isScrapingError =
+      errorMessage.includes("RENDER_SERVER_DOWN") ||
+      errorMessage.includes("一括スクレイピング") ||
+      errorMessage.includes("Puppeteerによるページ取得") ||
+      errorMessage.includes("スクレイピングサービスが利用できません");
 
-    if (isNetworkError) {
+    if (isScrapingError) {
       throw new Error(
         "競合サイトの取得に失敗しました。しばらくしてからもう一度実行してください。"
       );
     }
 
-    throw new Error(`競合分析エラー: ${error?.message || String(error)}`);
+    if (
+      errorMessage.includes("GoogleGenerativeAI") ||
+      errorMessage.includes("generativelanguage.googleapis.com")
+    ) {
+      throw new Error(
+        "Geminiによる競合分析に失敗しました。Gemini APIキーと利用可能なモデルを確認してください。"
+      );
+    }
+
+    throw new Error(`競合分析エラー: ${errorMessage}`);
   }
 };
