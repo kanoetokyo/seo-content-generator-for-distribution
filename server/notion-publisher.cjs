@@ -171,15 +171,28 @@ function tableBlocks(node) {
   return rows.map((row) => textBlock("paragraph", row)).filter(Boolean);
 }
 
-function toBlocks(nodes, imagesByHeading) {
+function toBlocks(
+  nodes,
+  imagesByHeading = new Map(),
+  imagesByHeadingIndex = new Map()
+) {
   const blocks = [];
   const insertedHeadingImages = new Set();
+  const insertedImageUploadIds = new Set();
+  let h2Index = 0;
 
-  const addHeadingImages = (headingText) => {
+  const addHeadingImages = (headingText, headingIndex) => {
     const key = normalizeText(headingText);
-    if (insertedHeadingImages.has(key)) return;
-    const images = imagesByHeading.get(key) || [];
-    images.forEach((image) => blocks.push(imageBlock(image.fileUploadId, image.altText)));
+    const exactMatches = imagesByHeading.get(key) || [];
+    // The order is a fallback for small manual edits to the H2 text after image generation.
+    const images = exactMatches.length
+      ? exactMatches
+      : imagesByHeadingIndex.get(headingIndex) || [];
+    images.forEach((image) => {
+      if (insertedImageUploadIds.has(image.fileUploadId)) return;
+      blocks.push(imageBlock(image.fileUploadId, image.altText));
+      insertedImageUploadIds.add(image.fileUploadId);
+    });
     insertedHeadingImages.add(key);
   };
 
@@ -225,15 +238,22 @@ function toBlocks(nodes, imagesByHeading) {
     }
 
     if (block) blocks.push(block);
-    if (tagName === "h2") addHeadingImages(text);
+    if (tagName === "h2") {
+      addHeadingImages(text, h2Index);
+      h2Index += 1;
+    }
   };
 
   nodes.forEach(visit);
-  return { blocks, insertedHeadingImages };
+  return { blocks, insertedHeadingImages, insertedImageUploadIds };
 }
 
-function htmlToBlocks(html, imagesByHeading = new Map()) {
-  return toBlocks(getTopLevelNodes(html), imagesByHeading);
+function htmlToBlocks(
+  html,
+  imagesByHeading = new Map(),
+  imagesByHeadingIndex = new Map()
+) {
+  return toBlocks(getTopLevelNodes(html), imagesByHeading, imagesByHeadingIndex);
 }
 
 function inferCategory(...values) {
@@ -327,6 +347,10 @@ async function uploadImageToNotion(token, image, index) {
 
   return {
     heading: normalizeText(image.h2Text),
+    headingIndex:
+      Number.isInteger(image.headingIndex) && image.headingIndex >= 0
+        ? image.headingIndex
+        : undefined,
     altText: normalizeText(image.altText),
     fileUploadId: upload.id,
   };
@@ -361,7 +385,11 @@ async function createNotionArticle({
     const image = images[index];
     if (image.fileUploadId) {
       uploadedImages.push({
-        heading: normalizeText(image.h2Text),
+        heading: normalizeText(image.heading || image.h2Text),
+        headingIndex:
+          Number.isInteger(image.headingIndex) && image.headingIndex >= 0
+            ? image.headingIndex
+            : undefined,
         altText: normalizeText(image.altText),
         fileUploadId: image.fileUploadId,
       });
@@ -371,20 +399,31 @@ async function createNotionArticle({
   }
 
   const imagesByHeading = new Map();
+  const imagesByHeadingIndex = new Map();
   uploadedImages.forEach((image) => {
-    if (!image.heading) return;
-    const list = imagesByHeading.get(image.heading) || [];
-    list.push(image);
-    imagesByHeading.set(image.heading, list);
+    if (image.heading) {
+      const list = imagesByHeading.get(image.heading) || [];
+      list.push(image);
+      imagesByHeading.set(image.heading, list);
+    }
+    if (Number.isInteger(image.headingIndex)) {
+      const list = imagesByHeadingIndex.get(image.headingIndex) || [];
+      list.push(image);
+      imagesByHeadingIndex.set(image.headingIndex, list);
+    }
   });
 
-  const { blocks, insertedHeadingImages } = htmlToBlocks(content, imagesByHeading);
+  const { blocks, insertedImageUploadIds } = htmlToBlocks(
+    content,
+    imagesByHeading,
+    imagesByHeadingIndex
+  );
   if (!blocks.some((block) => block.type === "heading_1")) {
     blocks.unshift(textBlock("heading_1", normalizeText(title)));
   }
 
   for (const image of uploadedImages) {
-    if (!insertedHeadingImages.has(image.heading)) {
+    if (!insertedImageUploadIds.has(image.fileUploadId)) {
       blocks.push(imageBlock(image.fileUploadId, image.altText));
     }
   }

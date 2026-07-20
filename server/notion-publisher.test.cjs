@@ -40,6 +40,23 @@ test("生成画像を対応するH2見出しの直後に配置する", () => {
   assert.equal(blocks[1].image.file_upload.id, "file-upload-id");
 });
 
+test("見出し名が編集されてもH2の順番で生成画像を配置する", () => {
+  const imagesByHeadingIndex = new Map([
+    [1, [{ fileUploadId: "second-image", altText: "2番目の見出し画像" }]],
+  ]);
+  const { blocks } = htmlToBlocks(
+    "<h2>最初の見出し</h2><p>本文1です。</p><h2>編集後の見出し</h2><p>本文2です。</p>",
+    new Map(),
+    imagesByHeadingIndex
+  );
+
+  assert.deepEqual(
+    blocks.map((block) => block.type),
+    ["heading_2", "paragraph", "heading_2", "image", "paragraph"]
+  );
+  assert.equal(blocks[3].image.file_upload.id, "second-image");
+});
+
 test("記事内容から既存ブログ用のカテゴリを推定する", () => {
   assert.deepEqual(inferCategory("エアコンのカビ対策"), {
     name: "エアコンクリーニング",

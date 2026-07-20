@@ -20,7 +20,8 @@ interface ReportViewProps {
 }
 
 interface UploadedNotionImage {
-  h2Text: string;
+  heading: string;
+  headingIndex: number;
   altText: string;
   fileUploadId: string;
 }
@@ -150,7 +151,9 @@ export const ReportView: React.FC<ReportViewProps> = ({
         setProgressMessage(
           `画像をNotionへ保存中 (${index + 1}/${sectionsToUpload.length}): ${section.h2Text}`
         );
-        completedUploads.push(await uploadImageToNotion(section, index));
+        completedUploads.push(
+          await uploadImageToNotion(section, index, section.id)
+        );
       }
 
       setUploadedImages(completedUploads);
