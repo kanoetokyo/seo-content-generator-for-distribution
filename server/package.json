@@ -10,7 +10,7 @@
     "dev:full": "nodemon scraping-server-full.js"
   },
   "dependencies": {
-    "@sparticuz/chromium": "^126.0.0",
+    "@sparticuz/chromium": "^141.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
@@ -19,8 +19,8 @@
     "googleapis": "^166.0.0",
     "helmet": "^7.2.0",
     "node-fetch": "^2.7.0",
-    "puppeteer": "^21.11.0",
-    "puppeteer-core": "^21.11.0"
+    "puppeteer": "^23.11.1",
+    "puppeteer-core": "^23.11.1"
   },
   "engines": {
     "node": ">=18.0.0"

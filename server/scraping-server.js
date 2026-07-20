@@ -5,14 +5,13 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-// 環境に応じてPuppeteerパッケージを使い分け
+const isVercel = Boolean(process.env.VERCEL);
+// Vercelでは軽量版、ローカルではChromium同梱版を使用する
 const puppeteer =
-  process.env.NODE_ENV === "production"
-    ? require("puppeteer-core") // 本番環境：軽量版
-    : require("puppeteer"); // 開発環境：Chromium付き
+  isVercel ? require("puppeteer-core") : require("puppeteer");
 const fetch = require("node-fetch");
 const path = require("path");
-const chromium = require("@sparticuz/chromium");
+const chromium = isVercel ? require("@sparticuz/chromium-min") : null;
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
@@ -154,14 +153,37 @@ app.use("/api", authenticate);
 app.use("/api", apiLimiter);
 
 // Google Search API設定
+const SERPER_API_KEY = process.env.SERPER_API_KEY;
 const GOOGLE_API_KEY =
   process.env.GOOGLE_API_KEY || process.env.VITE_GOOGLE_API_KEY;
 const SEARCH_ENGINE_ID =
   process.env.GOOGLE_SEARCH_ENGINE_ID ||
   process.env.VITE_GOOGLE_SEARCH_ENGINE_ID;
+const USE_SERPER = Boolean(SERPER_API_KEY);
+const USE_GOOGLE_SEARCH = Boolean(GOOGLE_API_KEY && SEARCH_ENGINE_ID);
 
-// ブラウザインスタンスを保持（高速化のため）
+function getDisplayLink(link) {
+  try {
+    return new URL(link).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function mapSerperOrganicResult(item) {
+  return {
+    title: item.title,
+    link: item.link,
+    snippet: item.snippet || "",
+    displayLink: item.displayedLink || getDisplayLink(item.link),
+  };
+}
+
+// ブラウザインスタンスと起動中のPromiseを保持して、同時起動を防ぐ
 let browser = null;
+let browserLaunchPromise = null;
+let chromiumPath = null;
+let chromiumPathPromise = null;
 
 // 記事完了ベースの再起動カウンター
 let articlesCompleted = 0;
@@ -232,72 +254,106 @@ function logMemoryUsage(context = "") {
   }
 }
 
+function getChromiumPackUrl() {
+  if (process.env.CHROMIUM_PACK_URL) {
+    return process.env.CHROMIUM_PACK_URL;
+  }
+
+  return "https://github.com/Sparticuz/chromium/releases/download/v141.0.0/chromium-v141.0.0-pack.x64.tar";
+}
+
+async function getVercelChromiumPath() {
+  if (chromiumPath) return chromiumPath;
+
+  if (!chromiumPathPromise) {
+    chromium.setGraphicsMode = false;
+    chromiumPathPromise = chromium
+      .executablePath(getChromiumPackUrl())
+      .then((resolvedPath) => {
+        chromiumPath = resolvedPath;
+        return resolvedPath;
+      })
+      .catch((error) => {
+        chromiumPathPromise = null;
+        throw error;
+      });
+  }
+
+  return chromiumPathPromise;
+}
+
+async function launchBrowser() {
+  if (isVercel) {
+    const executablePath = await getVercelChromiumPath();
+    return puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath,
+      headless: true,
+      ignoreHTTPSErrors: true,
+      protocolTimeout: 60000,
+    });
+  }
+
+  return puppeteer.launch({
+    headless: true,
+    ignoreHTTPSErrors: true,
+    protocolTimeout: 60000,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--disable-gpu",
+    ],
+  });
+}
+
 // ブラウザを起動
 async function initBrowser() {
   logMemoryUsage("ブラウザ起動前");
-  // 既存のブラウザインスタンスのチェックはそのまま
   if (browser) {
     try {
       await browser.version();
-      return browser; // 正常ならそのまま返す
+      return browser;
     } catch (e) {
       console.log("⚠️ ブラウザが閉じていたため再起動します");
       browser = null;
     }
   }
 
-  if (!browser) {
-    const isProduction = process.env.NODE_ENV === "production";
-
-    if (isProduction) {
-      // 本番環境：@sparticuz/chromium を使用
-      console.log("🚀 Puppeteer (with @sparticuz/chromium) を起動中...");
-      try {
-        browser = await puppeteer.launch({
-          args: chromium.args,
-          defaultViewport: chromium.defaultViewport,
-          executablePath: await chromium.executablePath(),
-          headless: chromium.headless,
-          ignoreHTTPSErrors: true,
-          protocolTimeout: 60000, // 60秒のタイムアウト
+  if (!browserLaunchPromise) {
+    console.log(
+      `🚀 Puppeteer (${isVercel ? "Vercel Chromium" : "開発環境"}) を起動中...`
+    );
+    browserLaunchPromise = launchBrowser()
+      .then((launchedBrowser) => {
+        browser = launchedBrowser;
+        browser.on("disconnected", () => {
+          if (browser === launchedBrowser) browser = null;
         });
-        console.log("✅ @sparticuz/chromium ブラウザ起動完了");
-        const browserVersion = await browser.version();
-        console.log(`✅ 使用中のブラウザ: ${browserVersion}`);
-        logMemoryUsage("ブラウザ起動後");
-      } catch (error) {
-        console.error("❌ @sparticuz/chromium 起動エラー:", error);
-        return null;
-      }
-    } else {
-      // 開発環境：通常のpuppeteer を使用
-      console.log("🚀 Puppeteer (開発環境) を起動中...");
-      try {
-        browser = await puppeteer.launch({
-          headless: true,
-          ignoreHTTPSErrors: true,
-          protocolTimeout: 60000, // 60秒のタイムアウト
-          args: [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-accelerated-2d-canvas",
-            "--no-first-run",
-            "--no-zygote",
-            "--disable-gpu",
-          ],
-        });
-        console.log("✅ 開発環境ブラウザ起動完了");
-        const browserVersion = await browser.version();
-        console.log(`✅ 使用中のブラウザ: ${browserVersion}`);
-        logMemoryUsage("ブラウザ起動後");
-      } catch (error) {
-        console.error("❌ 開発環境Puppeteer起動エラー:", error);
-        return null;
-      }
-    }
+        return browser.version().then(() => browser);
+      })
+      .catch((error) => {
+        browser = null;
+        throw error;
+      })
+      .finally(() => {
+        browserLaunchPromise = null;
+      });
   }
-  return browser;
+
+  try {
+    const launchedBrowser = await browserLaunchPromise;
+    console.log("✅ Puppeteerブラウザ起動完了");
+    logMemoryUsage("ブラウザ起動後");
+    return launchedBrowser;
+  } catch (error) {
+    console.error("❌ Puppeteer起動エラー:", error);
+    return null;
+  }
 }
 
 // スクレイピング処理
@@ -396,7 +452,8 @@ async function scrapeHeadings(url) {
     }
 
     // ページにアクセス（タイムアウト時間を環境変数で制御）
-    const TIMEOUT_MS = parseInt(process.env.TIMEOUT_MS) || 60000; // デフォルト60秒に短縮
+    const TIMEOUT_MS =
+      parseInt(process.env.TIMEOUT_MS) || (isVercel ? 15000 : 60000);
     console.log(`⏰ タイムアウト設定: ${TIMEOUT_MS / 1000}秒`);
 
     // ページアクセスを安全に実行
@@ -415,7 +472,7 @@ async function scrapeHeadings(url) {
         console.log(`⚠️ 初回アクセス失敗、再試行中: ${gotoError.message}`);
         await page.goto(url, {
           waitUntil: "load", // より緩い条件で再試行
-          timeout: 30000, // 30秒で再試行
+          timeout: isVercel ? 5000 : 30000,
         });
         console.log(`✅ 再試行でページアクセス成功: ${url}`);
       } else {
@@ -596,7 +653,8 @@ app.post("/api/scrape-multiple", async (req, res) => {
     console.log(`📋 ${urls.length}件のURLをスクレイピング開始`);
 
     // 🚀 並列処理数を環境変数で制御（メモリ効率重視）
-    const CONCURRENT_LIMIT = parseInt(process.env.CONCURRENT_LIMIT) || 3;
+    const CONCURRENT_LIMIT =
+      parseInt(process.env.CONCURRENT_LIMIT) || (isVercel ? 2 : 3);
     console.log(`🔧 並列処理数: ${CONCURRENT_LIMIT}個（メモリ効率重視）`);
 
     // メモリ使用量を監視
@@ -767,6 +825,17 @@ app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     message: "スクレイピングサーバーは正常に動作しています",
+    features: {
+      gemini: Boolean(process.env.GEMINI_API_KEY),
+      googleSearch: USE_GOOGLE_SEARCH,
+      serper: USE_SERPER,
+      spreadsheet: Boolean(process.env.SPREADSHEET_ID),
+      wordpress: Boolean(
+        process.env.WP_BASE_URL &&
+          process.env.WP_USERNAME &&
+          process.env.WP_APP_PASSWORD
+      ),
+    },
   });
 });
 
@@ -875,14 +944,76 @@ app.post("/api/google-search", async (req, res) => {
     return res.status(400).json({ error: "Query is required" });
   }
 
-  if (!GOOGLE_API_KEY || !SEARCH_ENGINE_ID) {
-    console.error("Google Search API keys not configured");
-    return res.status(500).json({ error: "Google Search API not configured" });
+  if (!USE_SERPER && !USE_GOOGLE_SEARCH) {
+    console.error(
+      "検索APIが未設定です（SERPER_API_KEY または GOOGLE_API_KEY + GOOGLE_SEARCH_ENGINE_ID が必要）"
+    );
+    return res.status(500).json({
+      error:
+        "検索APIが設定されていません。SERPER_API_KEY または GOOGLE_API_KEY + GOOGLE_SEARCH_ENGINE_ID を .env に設定してください。",
+    });
   }
 
   try {
-    console.log(`🔍 Google Search for: ${query}`);
     const results = [];
+
+    if (USE_SERPER) {
+      console.log(`🔍 Serper Search for: ${query}`);
+
+      const firstResponse = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: {
+          "X-API-KEY": SERPER_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ q: query, num: 10, gl: "jp", hl: "ja" }),
+      });
+
+      if (!firstResponse.ok) {
+        const errorData = await firstResponse.json().catch(() => ({}));
+        console.error("Serper API error:", errorData);
+        return res.status(firstResponse.status).json({
+          error:
+            process.env.NODE_ENV === "production"
+              ? "Search service error"
+              : errorData.message || "Serper API error",
+        });
+      }
+
+      const firstData = await firstResponse.json();
+      if (firstData.organic) {
+        results.push(...firstData.organic.map(mapSerperOrganicResult));
+      }
+
+      if (numResults > 10 && results.length >= 10) {
+        const secondResponse = await fetch("https://google.serper.dev/search", {
+          method: "POST",
+          headers: {
+            "X-API-KEY": SERPER_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            q: query,
+            num: 10,
+            page: 2,
+            gl: "jp",
+            hl: "ja",
+          }),
+        });
+
+        if (secondResponse.ok) {
+          const secondData = await secondResponse.json();
+          if (secondData.organic) {
+            results.push(...secondData.organic.map(mapSerperOrganicResult));
+          }
+        }
+      }
+
+      console.log(`✅ Serper Search completed: ${results.length} results`);
+      return res.json({ success: true, results: results.slice(0, numResults) });
+    }
+
+    console.log(`🔍 Google Custom Search for: ${query}`);
 
     // 1回目のリクエスト（1-10位）
     // 日本語・日本地域の検索結果を優先
@@ -922,15 +1053,15 @@ app.post("/api/google-search", async (req, res) => {
       }
     }
 
-    console.log(`✅ Google Search completed: ${results.length} results`);
+    console.log(`✅ Google Custom Search completed: ${results.length} results`);
     res.json({ success: true, results });
   } catch (error) {
-    console.error("Google Search error:", error.message);
+    console.error("Search error:", error.message);
     res.status(500).json({
       error:
         process.env.NODE_ENV === "production"
           ? "Internal server error"
-          : "Failed to perform Google search",
+          : "Failed to perform search",
     });
   }
 });
@@ -1286,19 +1417,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// プロセスエラーハンドリング
-process.on("uncaughtException", (err) => {
-  console.error("❌ Uncaught Exception:", err);
-  process.exit(1);
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
-  process.exit(1);
-});
-
-// サーバー起動
-const server = app.listen(PORT, "0.0.0.0", () => {
+function logStartup() {
   console.log(`
 🎉 スクレイピングサーバー起動完了！
 📡 URL: http://localhost:${PORT}
@@ -1318,12 +1437,18 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   `);
 
   // Google Search API設定の確認（APIキーはマスク）
-  if (GOOGLE_API_KEY && SEARCH_ENGINE_ID) {
+  if (USE_SERPER) {
+    console.log("✅ Serper Search API: 設定済み");
+    console.log("   - API Key: ****");
+  } else if (USE_GOOGLE_SEARCH) {
     console.log("✅ Google Custom Search API: 設定済み");
     console.log("   - API Key: ****");
     console.log(`   - Search Engine ID: ${SEARCH_ENGINE_ID}`);
   } else {
-    console.log("⚠️  Google Custom Search API: 未設定");
+    console.log("⚠️  競合検索API: 未設定");
+    console.log(
+      "   - SERPER_API_KEY または GOOGLE_API_KEY + GOOGLE_SEARCH_ENGINE_ID を設定してください"
+    );
     if (!GOOGLE_API_KEY) console.log("   - GOOGLE_API_KEY が見つかりません");
     if (!SEARCH_ENGINE_ID)
       console.log("   - GOOGLE_SEARCH_ENGINE_ID が見つかりません");
@@ -1337,13 +1462,31 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   }
 
   console.log("🔥 SERVER IS READY TO RECEIVE REQUESTS!");
-});
+}
 
-// 終了時の処理
-process.on("SIGINT", async () => {
-  console.log("\n👋 サーバーを終了します...");
-  if (browser) {
-    await browser.close();
-  }
-  process.exit(0);
-});
+if (require.main === module) {
+  // プロセスエラーハンドリング
+  process.on("uncaughtException", (err) => {
+    console.error("❌ Uncaught Exception:", err);
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason, promise) => {
+    console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
+    process.exit(1);
+  });
+
+  // サーバー起動
+  app.listen(PORT, "0.0.0.0", logStartup);
+
+  // 終了時の処理
+  process.on("SIGINT", async () => {
+    console.log("\n👋 サーバーを終了します...");
+    if (browser) {
+      await browser.close();
+    }
+    process.exit(0);
+  });
+}
+
+module.exports = app;
