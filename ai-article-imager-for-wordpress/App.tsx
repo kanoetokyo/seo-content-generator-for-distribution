@@ -41,7 +41,7 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
 
   const [postConfig, setPostConfig] = useState<NotionPostConfig>({
     title: "AI Generated Article", // 記事データから自動的に設定される
-    status: "draft",
+    status: "published",
   });
   const [promptStyle, setPromptStyle] = useState<string>(
     "Simple and clean illustration style"

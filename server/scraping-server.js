@@ -1193,7 +1193,7 @@ app.post("/api/notion/create-article", async (req, res) => {
       slug,
       summary,
       keyword,
-      status: status || process.env.NOTION_BLOG_DEFAULT_STATUS || "draft",
+      status: status || process.env.NOTION_BLOG_DEFAULT_STATUS || "published",
       images: Array.isArray(images) ? images : [],
       authorName:
         process.env.NOTION_BLOG_DEFAULT_AUTHOR || "勅使河原　将",

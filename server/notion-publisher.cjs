@@ -340,7 +340,7 @@ async function createNotionArticle({
   slug,
   summary,
   keyword,
-  status = "draft",
+  status = "published",
   images = [],
   authorName = "勅使河原　将",
   shopSlug = "corporate",

@@ -51,11 +51,11 @@ export const ConfigForm: React.FC<ConfigFormProps> = ({
             onChange={handlePostChange}
             className="mt-1 block w-full px-3 py-2 text-base border border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md"
           >
-            <option value="draft">下書きとして保存</option>
             <option value="published">公開記事として保存</option>
+            <option value="draft">下書きとして保存</option>
           </select>
           <p className="mt-2 text-xs text-gray-500">
-            公開記事として保存すると、ブログ側の同期対象になります。
+            通常は公開記事として保存します。確認が必要な場合だけ下書きを選んでください。
           </p>
         </div>
         <div className="md:col-span-2">
