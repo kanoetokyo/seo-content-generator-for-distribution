@@ -1,5 +1,8 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 
+const IMAGE_GENERATION_MODEL = "gemini-3-pro-image";
+const TEXT_ANALYSIS_MODEL = "gemini-3-flash-preview";
+
 // エクスポネンシャルバックオフ用のヘルパー関数
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -87,8 +90,7 @@ export const generateImage = async (
     let response: any;
 
     try {
-      // gemini-3-pro-image-previewを使用
-      const modelsToTry = ["gemini-3-pro-image-preview"];
+      const modelsToTry = [IMAGE_GENERATION_MODEL];
 
       let lastError;
 
@@ -229,7 +231,7 @@ export const checkForTextInImage = async (
   return retryWithExponentialBackoff(async () => {
     const ai = getNextAIClient();
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
+      model: TEXT_ANALYSIS_MODEL,
       contents: {
         parts: [
           {
@@ -268,7 +270,7 @@ Background Suggestion:`;
 
     const ai = getNextAIClient();
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
+      model: TEXT_ANALYSIS_MODEL,
       contents: prompt,
     });
     return response.text.trim().replace(/"/g, ""); // Remove quotes from response
@@ -285,7 +287,7 @@ export const summarizeText = async (text: string): Promise<string> => {
   return retryWithExponentialBackoff(async () => {
     const ai = getNextAIClient();
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
+      model: TEXT_ANALYSIS_MODEL,
       contents: `Summarize the following text in a single, concise sentence suitable for an image alt text: "${text}"`,
     });
     return response.text.trim();
