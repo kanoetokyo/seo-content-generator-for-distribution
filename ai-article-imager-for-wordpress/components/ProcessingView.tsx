@@ -5,11 +5,10 @@ import { H2ProcessingCard } from './H2ProcessingCard';
 interface ProcessingViewProps {
     sections: H2Section[];
     onComplete: (finalSections: H2Section[], logs: ReportLog[]) => void;
-    availableImages?: Array<{name: string; base64: string}>;  // 追加
     autoExecute?: boolean;  // 自動実行フラグ
 }
 
-export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initialSections, onComplete, availableImages, autoExecute }) => {
+export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initialSections, onComplete, autoExecute }) => {
     const [sections, setSections] = useState<H2Section[]>(initialSections);
     const [isProcessingAll, setIsProcessingAll] = useState(false);
     const [completedCount, setCompletedCount] = useState(0);
@@ -79,7 +78,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initia
                 const logs: ReportLog[] = sections.map(s => ({
                     h2Text: s.h2Text,
                     status: s.status as 'success' | 'error',
-                    message: s.errorMessage || 'Image generated and processed successfully.',
+                    message: s.errorMessage || '画像を生成し、ブログ用サイズへ調整しました。',
                     imageUrl: s.sourceUrl || s.generatedImage || undefined,
                     mediaId: s.mediaId || undefined,
                 }));
@@ -136,15 +135,15 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initia
             switch (s.status) {
                 case 'success':
                     status = 'success';
-                    message = 'Image generated and processed successfully.';
+                    message = '画像を生成し、ブログ用サイズへ調整しました。';
                     break;
                 case 'error':
                     status = 'error';
-                    message = s.errorMessage || 'An unknown error occurred.';
+                    message = s.errorMessage || '不明なエラーが発生しました。';
                     break;
                 default: // 'pending' or 'generating'
                     status = 'skipped';
-                    message = 'Image generation was skipped.';
+                    message = '画像生成を省略しました。';
                     break;
             }
 
@@ -163,25 +162,25 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initia
 
     return (
         <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-md flex justify-between items-center">
+            <div className="bg-white p-6 rounded-lg shadow-md flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Processing Article Sections</h2>
-                    <p className="text-gray-600 mt-1">Generate an image for each H2 heading below.</p>
+                    <h2 className="text-2xl font-bold text-gray-900">各章のカノエくん画像</h2>
+                    <p className="text-gray-600 mt-1">まとめ以外の全H2に、内容を説明する画像を1枚ずつ生成します。</p>
                 </div>
-                <div className="flex items-center space-x-4">
+                <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:w-auto">
                     <button
                         onClick={handleGenerateAll}
                         disabled={isProcessingAll}
-                        className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-gray-400"
+                        className="w-full px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-gray-400"
                     >
                         {isProcessingAll ? `順次処理中... (${completedCount}/${sections.length})` : '全画像を順次生成'}
                     </button>
                     <button
                         onClick={handleProceedToReport}
                         disabled={!canProceed}
-                        className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-400"
+                        className="w-full px-6 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-400"
                     >
-                        Proceed to Upload
+                        Notionへの保存へ進む
                     </button>
                 </div>
             </div>
@@ -193,7 +192,6 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initia
                         updateSection={updateSection}
                         startProcessing={isProcessingAll && currentProcessingIndex === index}
                         onProcessingComplete={() => {}}
-                        availableImages={availableImages}
                     />
                 ))}
             </div>

@@ -35,6 +35,7 @@
 |-----------|------|--------|
 | Node.js | このツールを動かすために必要なソフト | [公式サイト](https://nodejs.org/)からダウンロード（v18以上） |
 | Gemini APIキー | AIが記事を書くために必要 | [Google AI Studio](https://aistudio.google.com/)で無料取得 |
+| OpenAI APIキー | GPT Image 2でカノエくん画像を生成するために必要 | [OpenAI Platform](https://platform.openai.com/)で取得 |
 | Custom Search APIキー | 競合サイトを調べるために必要（※） | [Google Cloud Console](https://console.cloud.google.com/)で取得 |
 | カスタム検索エンジンID | 上記と一緒に使う（※） | [Programmable Search Engine](https://programmablesearchengine.google.com/)で作成 |
 
@@ -43,15 +44,9 @@
 > [serper.dev](https://serper.dev) でアカウントを作成すると、2,500クレジット（約1,250記事分）が無料で付与されます。
 > `.env` に `SERPER_API_KEY` を設定するだけで、他の手順は同じです。
 
-#### オプション（なくても動きます）
-
-| 必要なもの | 説明 | 入手先 |
-|-----------|------|--------|
-| OpenAI APIキー | 最終校閲（ファクトチェック・出典検証）で使用 | [OpenAI Platform](https://platform.openai.com/)で取得 |
-
 > **OpenAI APIキーについて**
 > 記事の構成作成・執筆・基本的な校閲は **Gemini だけで完結**するため、OpenAI APIキーがなくても記事は作れます。
-> 設定すると、GPT-5 を使った**最終校閲**（ファクトチェック、数値・出典の検証、固有名詞チェックなど）が有効になり、記事の精度がさらに上がります。
+> 画像生成には `OPENAI_API_KEY` が必要です。キーはサーバー側だけに設定し、`VITE_` を付けないでください。
 
 ---
 
@@ -92,6 +87,9 @@ npm install
 # Gemini API（Google AI Studioで取得したキー）
 GEMINI_API_KEY=ここにあなたのGemini APIキーを貼り付け
 VITE_GEMINI_API_KEY=ここにも同じキーを貼り付け
+
+# GPT Image 2画像生成（OpenAI Platformで取得したキー）
+OPENAI_API_KEY=ここにOpenAI APIキーを貼り付け
 
 # 競合調査用（どちらか一方を設定）
 #

@@ -97,7 +97,7 @@
 | Custom Search API Key | 競合調査（推奨） | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) |
 | Google Search Engine ID | 上記と一緒に使う | [Programmable Search Engine](https://programmablesearchengine.google.com/) |
 | Serper API Key | 競合調査（Custom Searchが使えない場合の代替） | [Serper](https://serper.dev) |
-| OpenAI API Key | GPT-5 最終校閲（オプション） | [OpenAI Platform](https://platform.openai.com/) |
+| OpenAI API Key | GPT Image 2画像生成・GPT-5最終校閲 | [OpenAI Platform](https://platform.openai.com/) |
 | Supabase URL + Anon Key | 一次情報DB（オプション） | [Supabase](https://supabase.com/) |
 
 > **競合調査の検索APIについて**
@@ -177,7 +177,7 @@ APIキーなどの機密情報をSecret Managerに保存します。
 |---------------|------|-----|
 | `GEMINI_API_KEY` | Gemini API認証キー | Google AI Studioで取得 |
 | `INTERNAL_API_KEY` | 内部API認証キー | 任意の文字列を設定 |
-| `OPENAI_API_KEY` | OpenAI API認証キー | OpenAIで取得（なければ空欄） |
+| `OPENAI_API_KEY` | GPT Image 2画像生成用のOpenAI API認証キー | OpenAIで取得した値 |
 
 #### 必須シークレット（URL）※デプロイ後に更新
 

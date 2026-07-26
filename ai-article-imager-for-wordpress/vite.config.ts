@@ -7,7 +7,6 @@ export default defineConfig(({ mode }) => {
     const parentEnv = loadEnv(mode, '..', '');
     const localEnv = loadEnv(mode, '.', '');
     const env = { ...parentEnv, ...localEnv, ...process.env };
-    const geminiApiKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || '';
     const apiUrl = env.VITE_API_URL || 'http://localhost:3001/api';
     
     return {
@@ -28,11 +27,7 @@ export default defineConfig(({ mode }) => {
       },
       assetsInclude: ['**/*.png', '**/*.jpg', '**/*.jpeg'],
       define: {
-        'process.env.API_KEY': JSON.stringify(geminiApiKey),
-        'process.env.GEMINI_API_KEY': JSON.stringify(geminiApiKey),
-        'process.env.API_KEY_2': JSON.stringify(env.GEMINI_API_KEY_2 || ''),
-        'process.env.API_KEY_3': JSON.stringify(env.GEMINI_API_KEY_3 || ''),
-        // APIサーバーのURL（Notion連携はサーバー側で管理）
+        // APIキーはブラウザへ渡さず、APIサーバー側で管理する
         'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
         'import.meta.env.VITE_INTERNAL_API_KEY': JSON.stringify(env.VITE_INTERNAL_API_KEY),
       },

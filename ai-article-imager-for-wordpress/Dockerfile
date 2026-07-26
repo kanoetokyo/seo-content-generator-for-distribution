@@ -11,15 +11,12 @@
   COPY . .
 
   # ビルド時の環境変数
-  ARG VITE_GEMINI_API_KEY
   ARG VITE_BACKEND_URL
   ARG VITE_INTERNAL_API_KEY
   ARG VITE_MAIN_APP_URL
 
   # .envファイルを作成（Viteが読み込めるように）
-  RUN echo "GEMINI_API_KEY=${VITE_GEMINI_API_KEY}" > .env && \
-      echo "VITE_GEMINI_API_KEY=${VITE_GEMINI_API_KEY}" >> .env && \
-      echo "VITE_BACKEND_URL=${VITE_BACKEND_URL}" >> .env && \
+  RUN echo "VITE_BACKEND_URL=${VITE_BACKEND_URL}" > .env && \
       echo "VITE_API_URL=${VITE_BACKEND_URL}/api" >> .env && \
       echo "VITE_INTERNAL_API_KEY=${VITE_INTERNAL_API_KEY}" >> .env && \
       echo "VITE_MAIN_APP_URL=${VITE_MAIN_APP_URL}" >> .env

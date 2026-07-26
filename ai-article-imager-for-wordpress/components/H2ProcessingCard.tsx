@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { H2Section } from '../types';
-import { generateImage, generateBackgroundInstruction } from '../services/geminiService';
+import { generateKanoeImage } from '../services/imageGenerationService';
 import { ensure16x9 } from '../services/imageProcessor';
 
 interface H2ProcessingCardProps {
@@ -8,70 +8,49 @@ interface H2ProcessingCardProps {
     updateSection: (section: H2Section) => void;
     startProcessing: boolean;
     onProcessingComplete: () => void;
-    availableImages?: Array<{name: string; base64: string}>;  // 利用可能な画像リスト
 }
 
-export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, updateSection, startProcessing, onProcessingComplete, availableImages }) => {
+export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, updateSection, startProcessing, onProcessingComplete }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [editablePrompt, setEditablePrompt] = useState(
         section.prompt + (section.backgroundInstruction ? `\n- **背景の指定:** ${section.backgroundInstruction}` : '')
     );
 
     const handleGenerate = useCallback(async () => {
-        if (!section.baseImage) {
-            updateSection({ ...section, status: 'error', errorMessage: "No base image selected." });
-            onProcessingComplete();
-            return;
-        }
-
         const isFirstGeneration = section.status === 'pending';
-        updateSection({ ...section, status: 'generating', errorMessage: null, generationStep: 'Starting...' });
+        updateSection({ ...section, status: 'generating', errorMessage: null, generationStep: 'カノエくん画像を準備中...' });
 
         try {
-            let currentPrompt = editablePrompt;
-            let finalBgInstruction = section.backgroundInstruction;
-
-            if (isFirstGeneration) {
-                updateSection({ ...section, status: 'generating', generationStep: 'Generating background suggestion...' });
-                try {
-                    finalBgInstruction = await generateBackgroundInstruction(section.h2Text, section.paragraphText);
-                    currentPrompt = `${editablePrompt}\n- **背景の指定:** ${finalBgInstruction}`;
-                    setEditablePrompt(currentPrompt);
-                } catch (error) {
-                    console.error("Failed to generate background", error);
-                }
-            }
-
-            // 画像生成（1回のみ、テキスト検出・除去なし）
             updateSection({
                 ...section,
                 status: 'generating',
-                prompt: currentPrompt,
-                backgroundInstruction: finalBgInstruction,
-                generationStep: 'Generating image...'
+                prompt: editablePrompt,
+                generationStep: 'GPT Image 2で画像を生成中...'
             });
 
-            const generatedImgB64 = await generateImage(section.baseImage, currentPrompt);
+            const generatedImage = await generateKanoeImage(
+                section.h2Text,
+                section.paragraphText,
+                editablePrompt
+            );
 
-            console.log(`✅ 画像生成完了 [H2 #${section.id}]`, {
+            console.log(`✅ カノエくん画像生成完了 [H2 #${section.id}]`, {
                 h2Text: section.h2Text,
+                model: generatedImage.model,
+                size: generatedImage.size,
                 timestamp: new Date().toISOString()
             });
 
-            updateSection({ ...section, status: 'generating', generationStep: 'Finalizing image format...' });
-            const finalImage = await ensure16x9(generatedImgB64, 1920, 1080);
-            
-            const simulatedMediaId = Math.floor(Math.random() * 1000) + 1;
-            const simulatedUrl = `https://your-site.com/wp-content/uploads/2024/h2_${section.id}.jpg`;
+            updateSection({ ...section, status: 'generating', generationStep: 'ブログ用サイズに調整中...' });
+            const finalImage = await ensure16x9(generatedImage.imageDataUrl, 1920, 1080);
             
             updateSection({ 
                 ...section, 
-                prompt: currentPrompt,
-                backgroundInstruction: finalBgInstruction,
+                prompt: editablePrompt,
                 status: 'success', 
                 generatedImage: finalImage, 
-                mediaId: simulatedMediaId, 
-                sourceUrl: simulatedUrl,
+                mediaId: null,
+                sourceUrl: null,
                 generationStep: null,
                 errorMessage: null,
             });
@@ -85,20 +64,10 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
             console.error('  - エラータイプ:', error?.name || 'UnknownError');
             console.error('  - ステータスコード:', error?.status || error?.response?.status || 'Unknown');
             console.error('  - 現在のプロンプト長:', editablePrompt?.length || 0);
-            console.error('  - ベース画像名:', section.baseImageName);
             console.error('  - タイムスタンプ:', new Date().toISOString());
             console.error('  - 完全なエラー:', error);
 
-            // 500エラーの場合の追加情報
-            if (error?.status === 500 || error?.response?.status === 500) {
-                console.error('🔍 500エラー追加診断:');
-                console.error('  - このセクションでの生成試行回数を確認してください');
-                console.error('  - プロンプトに特殊文字が含まれている可能性があります');
-                console.error('  - Gemini APIのレート制限に達している可能性があります');
-                console.error('  - 数秒待ってから再試行することを推奨します');
-            }
-
-            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+            const errorMessage = error instanceof Error ? error.message : "画像生成で不明なエラーが発生しました。";
             updateSection({ ...section, status: 'error', errorMessage, prompt: editablePrompt, generationStep: null });
         } finally {
             if (isFirstGeneration) {
@@ -124,7 +93,13 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
     };
     
     const isGenerated = section.status === 'success' || section.status === 'error';
-    const buttonText = section.status === 'generating' ? 'Generating...' : isGenerated ? 'Regenerate Image' : 'Generate Image';
+    const buttonText = section.status === 'generating' ? '生成中...' : isGenerated ? '画像を再生成' : '画像を生成';
+    const statusText = {
+        pending: '未生成',
+        generating: '生成中',
+        success: '生成完了',
+        error: 'エラー',
+    }[section.status];
 
 
     return (
@@ -132,67 +107,37 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
             <div className="p-4 flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
                 <div className="flex-1">
                     <div className="flex items-center">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor()}`}>{section.status}</span>
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor()}`}>{statusText}</span>
                         <h3 className="ml-3 text-lg font-semibold text-gray-800">{section.h2Text}</h3>
                     </div>
                 </div>
                 <button
                     className="text-indigo-600 hover:text-indigo-800"
                 >
-                    {isExpanded ? 'Collapse' : 'Expand'}
+                    {isExpanded ? '閉じる' : '詳細'}
                 </button>
             </div>
             {isExpanded && (
                 <div className="p-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <h4 className="font-semibold text-gray-700 mb-2">Details</h4>
+                        <h4 className="font-semibold text-gray-700 mb-2">生成内容</h4>
                         <div className="text-sm space-y-3">
                             <div>
-                                <p className="font-medium text-gray-600 mb-1">Base Image:</p>
-                                {availableImages && availableImages.length > 0 ? (
-                                    <select
-                                        value={section.baseImageName}
-                                        onChange={(e) => {
-                                            const selectedImage = availableImages.find(img => img.name === e.target.value);
-                                            if (selectedImage) {
-                                                updateSection({
-                                                    ...section,
-                                                    baseImageName: selectedImage.name,
-                                                    baseImage: selectedImage.base64,
-                                                    status: 'pending'  // 画像を変更したら状態をリセット
-                                                });
-                                                console.log(`🔄 "${section.h2Text}" のベース画像を "${selectedImage.name}" に変更しました`);
-                                            }
-                                        }}
-                                        className="w-full p-2 border border-gray-300 rounded-md bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    >
-                                        {availableImages.map(img => (
-                                            <option key={img.name} value={img.name}>
-                                                {img.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                ) : (
-                                    <span className="text-gray-700">{section.baseImageName || 'N/A'}</span>
-                                )}
+                                <p className="font-medium text-gray-600 mb-1">公式キャラクター</p>
+                                <span className="text-gray-700">カノエくん（固定）</span>
                             </div>
                             <div>
-                                <p className="font-medium text-gray-600">AI Background Suggestion:</p>
-                                <div className="mt-1 p-2 bg-gray-50 rounded-md min-h-[40px] flex items-center">
-                                    {section.status === 'pending' && <span className="text-gray-400 italic">Will be generated automatically...</span>}
-                                    {section.status === 'generating' && !section.backgroundInstruction && <span className="text-blue-600 animate-pulse">Thinking of a background...</span>}
-                                    {section.backgroundInstruction && <span className="text-gray-800">{section.backgroundInstruction}</span>}
-                                    {section.status === 'error' && !section.backgroundInstruction && <span className="text-red-500">Could not generate suggestion.</span>}
-                                </div>
+                                <p className="font-medium text-gray-600">章の内容</p>
+                                <p className="mt-1 p-2 bg-gray-50 rounded-md text-gray-700">{section.paragraphText || '見出しをもとに画像を生成します。'}</p>
                             </div>
                              <div className="bg-gray-50 p-3 rounded-md">
-                                <label htmlFor={`prompt-${section.id}`} className="font-semibold text-gray-600">Editable Prompt:</label>
+                                <label htmlFor={`prompt-${section.id}`} className="font-semibold text-gray-600">追加の表現指示</label>
                                 <textarea
                                     id={`prompt-${section.id}`}
                                     value={editablePrompt}
                                     onChange={(e) => setEditablePrompt(e.target.value)}
                                     className="mt-1 block w-full h-48 p-2 text-xs font-mono text-gray-800 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                    aria-label="Editable prompt"
+                                    aria-label="追加の表現指示"
                                 />
                             </div>
                         </div>
@@ -200,12 +145,12 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
                     <div className="flex flex-col items-center justify-center">
                         <div className="w-full aspect-video bg-gray-100 rounded-md flex items-center justify-center overflow-hidden">
                         {section.status === 'success' && section.generatedImage && (
-                            <img src={section.generatedImage} alt="Generated" className="w-full h-full object-cover" />
+                            <img src={section.generatedImage} alt={section.altText} className="w-full h-full object-cover" />
                         )}
                         {section.status === 'generating' && (
                             <div className="text-center text-gray-500 p-4">
                                 <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-                                <p className="mt-2 font-semibold">Generating Image...</p>
+                                <p className="mt-2 font-semibold">カノエくん画像を生成中...</p>
                                 {section.generationStep && <p className="mt-1 text-sm text-indigo-600">{section.generationStep}</p>}
                             </div>
                         )}
@@ -213,7 +158,7 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
                             <div className="text-red-500 p-4">{section.errorMessage}</div>
                         )}
                         {section.status === 'pending' && section.baseImage && (
-                           <img src={section.baseImage} alt="Base" className="w-full h-full object-cover opacity-50" />
+                           <img src={section.baseImage} alt="カノエくんの基準画像" className="w-full h-full object-contain p-4" />
                         )}
                         </div>
                         <button

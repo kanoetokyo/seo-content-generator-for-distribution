@@ -1,11 +1,6 @@
 {
   "files": [
-    "とは・概要.jpg",
-    "よくある質問・FAQ.png",
-    "メリット・おすすめ.png",
-    "解決策・ポイント.png",
-    "デメリット・リスク.jpg",
-    "サービス訴求.png"
+    "kanoe-kun.png"
   ],
-  "description": "デフォルト画像のファイル名リスト"
+  "description": "GPT Image 2で毎回参照するカノエくん公式基準画像"
 }

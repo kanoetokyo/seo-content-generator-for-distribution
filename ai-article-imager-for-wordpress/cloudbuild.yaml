@@ -3,9 +3,8 @@ steps:
     entrypoint: bash
     args:
       - -c
-      - "docker build --build-arg VITE_GEMINI_API_KEY=$$GEMINI_API_KEY --build-arg VITE_BACKEND_URL=$$BACKEND_URL --build-arg VITE_INTERNAL_API_KEY=$$INTERNAL_API_KEY --build-arg VITE_MAIN_APP_URL=$$MAIN_APP_URL -t asia-northeast1-docker.pkg.dev/$PROJECT_ID/seo-app/ai-article-imager:latest ."
+      - "docker build --build-arg VITE_BACKEND_URL=$$BACKEND_URL --build-arg VITE_INTERNAL_API_KEY=$$INTERNAL_API_KEY --build-arg VITE_MAIN_APP_URL=$$MAIN_APP_URL -t asia-northeast1-docker.pkg.dev/$PROJECT_ID/seo-app/ai-article-imager:latest ."
     secretEnv:
-      - GEMINI_API_KEY
       - BACKEND_URL
       - INTERNAL_API_KEY
       - MAIN_APP_URL
@@ -13,8 +12,6 @@ images:
   - asia-northeast1-docker.pkg.dev/$PROJECT_ID/seo-app/ai-article-imager:latest
 availableSecrets:
   secretManager:
-    - versionName: projects/$PROJECT_ID/secrets/GEMINI_API_KEY/versions/latest
-      env: GEMINI_API_KEY
     - versionName: projects/$PROJECT_ID/secrets/BACKEND_URL/versions/latest
       env: BACKEND_URL
     - versionName: projects/$PROJECT_ID/secrets/INTERNAL_API_KEY/versions/latest
