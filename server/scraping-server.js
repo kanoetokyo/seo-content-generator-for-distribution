@@ -17,6 +17,12 @@ const {
   NotionPublisherError,
   uploadImageToNotion,
 } = require("./notion-publisher.cjs");
+const {
+  IMAGE_MODEL,
+  IMAGE_QUALITY,
+  IMAGE_SIZE,
+  generateKanoeImage,
+} = require("./openai-image-service.cjs");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
@@ -832,6 +838,11 @@ app.get("/api/health", (req, res) => {
     message: "スクレイピングサーバーは正常に動作しています",
     features: {
       gemini: Boolean(process.env.GEMINI_API_KEY),
+      imageGeneration: {
+        configured: Boolean(process.env.OPENAI_API_KEY),
+        model: IMAGE_MODEL,
+        character: "カノエくん",
+      },
       googleSearch: USE_GOOGLE_SEARCH,
       serper: USE_SERPER,
       spreadsheet: Boolean(process.env.SPREADSHEET_ID),
@@ -1181,6 +1192,29 @@ app.post("/api/notion/upload-image", async (req, res) => {
   }
 });
 
+app.post("/api/images/generate", async (req, res) => {
+  const { heading, context, customPrompt } = req.body || {};
+
+  try {
+    const image = await generateKanoeImage({
+      apiKey: process.env.OPENAI_API_KEY,
+      heading,
+      context,
+      customPrompt,
+    });
+    res.status(201).json({ success: true, image });
+  } catch (error) {
+    const statusCode = Number(error?.status) || 500;
+    console.error("❌ GPT Image 2画像生成エラー:", error.message);
+    res.status(statusCode).json({
+      error:
+        statusCode >= 500 && process.env.NODE_ENV === "production"
+          ? error.message || "画像生成に失敗しました。"
+          : error.message,
+    });
+  }
+});
+
 app.post("/api/notion/create-article", async (req, res) => {
   const {
     title,
@@ -1522,6 +1556,7 @@ function logStartup() {
    - POST /api/google-search (Google検索)
    - GET /api/company-data (Google Drive実績データ)
    - POST /api/slack-notify (Slack通知プロキシ)
+   - POST /api/images/generate (${IMAGE_MODEL} + カノエくん)
    - POST /api/notion/upload-image (Notion画像保存)
    - POST /api/notion/create-article (Notion記事作成)
    - GET /api/wordpress/config (WordPress設定取得)
@@ -1547,6 +1582,12 @@ function logStartup() {
     if (!GOOGLE_API_KEY) console.log("   - GOOGLE_API_KEY が見つかりません");
     if (!SEARCH_ENGINE_ID)
       console.log("   - GOOGLE_SEARCH_ENGINE_ID が見つかりません");
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    console.log(`✅ 画像生成: ${IMAGE_MODEL} (${IMAGE_SIZE}, ${IMAGE_QUALITY})`);
+  } else {
+    console.log("⚠️  画像生成: OPENAI_API_KEY が未設定");
   }
 
   // 認証設定の確認

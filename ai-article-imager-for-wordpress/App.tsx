@@ -1,24 +1,15 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { NotionPostConfig, H2Section, AppState, ReportLog } from "./types";
 import { extractH1Title } from "./utils/parsers";
-import {
-  parseHtmlWithIntelligentMatching,
-  parseHtmlSimple,
-  parseHtmlWithFilenameMatching,
-} from "./utils/intelligentParser";
-import {
-  loadDefaultImages,
-  createFileFromBase64,
-} from "./utils/defaultImageLoader";
+import { parseHtmlSimple } from "./utils/intelligentParser";
+import { loadDefaultImages } from "./utils/defaultImageLoader";
 import { slackService } from "./services/slackService";
-import { FileUpload } from "./components/FileUpload";
 import { ConfigForm } from "./components/ConfigForm";
 import { ProcessingView } from "./components/ProcessingView";
 import { ReportView } from "./components/ReportView";
 import {
   CheckCircleIcon,
   DocumentTextIcon,
-  PhotoIcon,
   ArrowRightIcon,
 } from "./components/icons";
 
@@ -44,7 +35,7 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
     status: "published",
   });
   const [promptStyle, setPromptStyle] = useState<string>(
-    "Simple and clean illustration style"
+    "明るく清潔で、やさしく信頼できるブログ解説イラスト"
   );
 
   // localStorageから記事データを取得
@@ -73,33 +64,17 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
     slug: initialArticleData?.slug || articleDataFromStorage?.slug,
     keyword: initialArticleData?.keyword || articleDataFromStorage?.keyword,
   });
-  const [baseImages, setBaseImages] = useState<File[]>([]);
-
   const [h2Sections, setH2Sections] = useState<H2Section[]>([]);
   const [processedSections, setProcessedSections] = useState<H2Section[]>([]);
   const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
-  const [useIntelligentMatching, setUseIntelligentMatching] =
-    useState<boolean>(true);
   const [processingMessage, setProcessingMessage] = useState<string>("");
-  const [baseImageMap, setBaseImageMap] = useState<Map<string, string>>(
-    new Map()
-  );
-  const [useDefaultImages, setUseDefaultImages] = useState<boolean>(true); // デフォルトでtrueに変更
-  const [defaultImagesAvailable, setDefaultImagesAvailable] =
-    useState<boolean>(false);
-  const [isLoadingDefaultImages, setIsLoadingDefaultImages] =
-    useState<boolean>(false);
   const [processingStartTime, setProcessingStartTime] = useState<number>(0);
 
   // 自動実行用のrefを追加
   const autoExecuteRef = useRef<boolean>(false);
   const processArticleRef = useRef<(() => void) | null>(null);
 
-  const allInputsProvided =
-    articleHtml &&
-    articleHtml.trim() !== "" &&
-    (baseImages.length > 0 || useDefaultImages);
-  const tooManyImages = baseImages.length > 10;
+  const allInputsProvided = Boolean(articleHtml && articleHtml.trim() !== "");
 
   // postMessageリスナーを設定（メインアプリからのデータ受信用）
   useEffect(() => {
@@ -329,158 +304,38 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
     };
   }, []);
 
-  // デフォルト画像の存在確認
-  useEffect(() => {
-    const checkDefaultImages = async () => {
-      try {
-        const response = await fetch("/default-images/manifest.json");
-        if (response.ok) {
-          const manifest = await response.json();
-          if (manifest.files && manifest.files.length > 0) {
-            setDefaultImagesAvailable(true);
-            console.log(
-              `📁 ${manifest.files.length}個のデフォルト画像が利用可能です`
-            );
-          }
-        }
-      } catch (error) {
-        console.log("デフォルト画像は設定されていません");
-      }
-    };
-    checkDefaultImages();
-  }, []);
-
   const handleProcessArticle = useCallback(async () => {
     if (!allInputsProvided) {
-      alert(
-        "記事HTMLを入力し、画像をアップロードするか、デフォルト画像を使用してください。"
-      );
-      return;
-    }
-
-    if (!useDefaultImages && tooManyImages) {
-      alert(
-        "最大10枚までの画像をアップロードしてください。現在" +
-          baseImages.length +
-          "枚がアップロードされています。"
-      );
+      alert("記事HTMLを入力してください。");
       return;
     }
 
     try {
-      let baseImageMap = new Map<string, string>();
-
-      if (useDefaultImages) {
-        // デフォルト画像を読み込む
-        setIsLoadingDefaultImages(true);
-        setProcessingMessage("デフォルト画像を読み込み中...");
-        baseImageMap = await loadDefaultImages();
-        setIsLoadingDefaultImages(false);
-
-        if (baseImageMap.size === 0) {
-          alert(
-            "デフォルト画像が見つかりません。/public/default-images/フォルダに画像を配置してください。"
-          );
-          setProcessingMessage("");
-          return;
-        }
-      } else {
-        // アップロードされた画像を使用
-        const promises = baseImages.map((file) => {
-          return new Promise<void>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              baseImageMap.set(file.name, e.target?.result as string);
-              resolve();
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          });
-        });
-        await Promise.all(promises);
+      setProcessingMessage("カノエくんの基準画像を読み込み中...");
+      const baseImageMap = await loadDefaultImages();
+      if (baseImageMap.size === 0) {
+        throw new Error("カノエくんの基準画像が見つかりません。");
       }
 
-      // 以下の処理は変更なし
-      // baseImageMapをstateに保存
-      setBaseImageMap(baseImageMap);
-
-      try {
-        let sections: H2Section[];
-
-        // デバッグログ：マッチング方式の選択を明確にする
-        console.log("🔍 画像マッチング方式の選択:", {
-          useDefaultImages,
-          useIntelligentMatching,
-          baseImageMapSize: baseImageMap.size,
-          willUseFilenameMatching:
-            useDefaultImages ||
-            (useIntelligentMatching && baseImageMap.size >= 2),
-        });
-
-        if (
-          useDefaultImages ||
-          (useIntelligentMatching && baseImageMap.size >= 2)
-        ) {
-          // デフォルト画像または2枚以上の画像がある場合はファイル名ベースマッチングを使用
-          console.log("✅ ファイル名ベースのインテリジェントマッチングを使用");
-          if (useDefaultImages) {
-            console.log("  理由: デフォルト画像を使用中");
-          } else {
-            console.log("  理由: 手動アップロード画像が2枚以上");
-          }
-          setProcessingMessage("ファイル名ベースの画像マッチングを実行中...");
-          sections = await parseHtmlWithFilenameMatching(
-            articleHtml,
-            baseImageMap,
-            promptStyle,
-            (msg) => setProcessingMessage(msg)
-          );
-        } else {
-          // 1枚の場合または無効化されている場合は従来の均等分散
-          console.log("📦 従来の均等分散方式を使用");
-          console.log(
-            "  理由:",
-            !useIntelligentMatching ? "トグルがオフ" : "画像が1枚のみ"
-          );
-          sections = parseHtmlSimple(articleHtml, baseImageMap, promptStyle);
-        }
-
-        setH2Sections(sections);
-        setProcessingMessage("");
-        setProcessingStartTime(Date.now()); // 処理開始時刻を記録
-        setAppState(AppState.PROCESSING);
-      } catch (error) {
-        console.error("パース処理エラー:", error);
-        // フォールバック：従来のシンプル版を使用
-        console.log(
-          "⚠️ エラーが発生したため、従来の均等分散方式にフォールバック"
-        );
-        const sections = parseHtmlSimple(
-          articleHtml,
-          baseImageMap,
-          promptStyle
-        );
-        setH2Sections(sections);
-        setProcessingMessage("");
-        setProcessingStartTime(Date.now()); // 処理開始時刻を記録
-        setAppState(AppState.PROCESSING);
+      const sections = parseHtmlSimple(articleHtml, baseImageMap, promptStyle);
+      if (sections.length === 0) {
+        throw new Error("画像生成対象のH2見出しが見つかりません。");
       }
+
+      setH2Sections(sections);
+      setProcessingMessage("");
+      setProcessingStartTime(Date.now());
+      setAppState(AppState.PROCESSING);
     } catch (error) {
-      console.error("Error processing files:", error);
+      console.error("記事の画像生成準備エラー:", error);
+      setProcessingMessage("");
       alert(
-        `Error processing files: ${
+        `画像生成の準備に失敗しました: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
     }
-  }, [
-    articleHtml,
-    baseImages,
-    promptStyle,
-    allInputsProvided,
-    tooManyImages,
-    useDefaultImages,
-  ]);
+  }, [articleHtml, promptStyle, allInputsProvided]);
 
   // handleProcessArticle関数をrefに保存
   useEffect(() => {
@@ -546,70 +401,41 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
                     )}
                   </div>
                   <h3 className="mt-4 text-lg font-medium text-gray-900">
-                    Article HTML
+                    記事HTML
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
                     {articleHtml && articleHtml.trim() !== ""
                       ? articleDataFromStorage
                         ? "記事データを自動読み込みしました 🎉"
-                        : "HTML content provided."
-                      : "Paste your content below."}
+                        : "記事HTMLを読み込みました。"
+                      : "記事HTMLを貼り付けてください。"}
                   </p>
                 </div>
                 <div className="mt-4 flex-grow">
                   <textarea
                     value={articleHtml || ""}
                     onChange={(e) => setArticleHtml(e.target.value)}
-                    placeholder="<h2>Title</h2><p>Your article content...</p>"
+                    placeholder="<h2>見出し</h2><p>記事本文...</p>"
                     className="w-full h-full min-h-[150px] p-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     aria-label="Article HTML Content"
                   />
                 </div>
               </div>
 
-              {/* Base Images Upload */}
               <div className="bg-white p-6 rounded-lg shadow-md">
-                {defaultImagesAvailable && (
-                  <div className="mb-4">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={useDefaultImages}
-                        onChange={(e) => setUseDefaultImages(e.target.checked)}
-                        className="mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">
-                        デフォルト画像を使用する
-                        <span className="text-xs text-gray-500 ml-2">
-                          （事前に設定された画像セットを使用）
-                        </span>
-                      </span>
-                    </label>
-                  </div>
-                )}
-                {!useDefaultImages && (
-                  <FileUpload
-                    icon={<PhotoIcon />}
-                    title="Base Images"
-                    files={baseImages}
-                    onFilesUpload={setBaseImages}
-                    accept="image/*"
-                    multiple
+                <div className="flex h-full flex-col items-center justify-center text-center">
+                  <img
+                    src="/default-images/kanoe-kun.png"
+                    alt="カノエくん"
+                    className="h-40 w-40 object-contain"
                   />
-                )}
-                {useDefaultImages && (
-                  <div className="text-center">
-                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100">
-                      <CheckCircleIcon className="w-8 h-8 text-indigo-600" />
-                    </div>
-                    <h3 className="mt-4 text-lg font-medium text-gray-900">
-                      デフォルト画像
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      事前設定された画像セットを使用します
-                    </p>
-                  </div>
-                )}
+                  <h3 className="mt-3 text-lg font-medium text-gray-900">
+                    公式キャラクター「カノエくん」
+                  </h3>
+                  <p className="mt-1 max-w-sm text-sm text-gray-500">
+                    GPT Image 2が顔・髪型・紺色の制服を保ち、各H2の清掃内容に合わせた場面を生成します。
+                  </p>
+                </div>
               </div>
             </div>
             <ConfigForm
@@ -619,58 +445,19 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
               setPromptStyle={setPromptStyle}
             />
 
-            {/* インテリジェントマッチング設定 */}
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                🤖 画像マッチング設定
-              </h3>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">
-                    ファイル名ベースマッチング
-                    {baseImages.length < 2 && (
-                      <span className="text-orange-500 ml-2">
-                        （2枚以上の画像が必要）
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    ファイル名のキーワードを基に、H2内容に最適な画像を自動選択します
-                  </p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useIntelligentMatching && baseImages.length >= 2}
-                    disabled={baseImages.length < 2}
-                    onChange={(e) =>
-                      setUseIntelligentMatching(e.target.checked)
-                    }
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
-                </label>
+            {processingMessage && (
+              <div className="p-3 bg-blue-50 rounded text-sm text-blue-700">
+                {processingMessage}
               </div>
-              {processingMessage && (
-                <div className="mt-3 p-2 bg-blue-50 rounded text-sm text-blue-700">
-                  {processingMessage}
-                </div>
-              )}
-            </div>
+            )}
             <div className="text-center">
               <button
                 onClick={handleProcessArticle}
-                disabled={!allInputsProvided || tooManyImages}
+                disabled={!allInputsProvided}
                 className="inline-flex items-center px-8 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
               >
-                Process Article <ArrowRightIcon className="ml-2" />
+                H2ごとの画像を準備 <ArrowRightIcon className="ml-2" />
               </button>
-              {tooManyImages && (
-                <p className="mt-2 text-sm text-red-600">
-                  画像は最大10枚までアップロード可能です。現在
-                  {baseImages.length}枚がアップロードされています。
-                </p>
-              )}
             </div>
           </div>
         );
@@ -702,12 +489,6 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
             <ProcessingView
               sections={h2Sections}
               onComplete={handleProcessingComplete}
-              availableImages={Array.from(baseImageMap.entries()).map(
-                ([name, base64]) => ({
-                  name,
-                  base64,
-                })
-              )}
               autoExecute={autoExecuteRef.current}
             />
           </div>
@@ -734,7 +515,7 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
                     d="M10 19l-7-7m0 0l7-7m-7 7h18"
                   />
                 </svg>
-                Processing Article Sectionsに戻る
+                画像生成画面に戻る
               </button>
               <div className="text-sm text-gray-500">
                 ※ 生成済みの画像データは保持されます（再処理可能）

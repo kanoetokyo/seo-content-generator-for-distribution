@@ -60,7 +60,7 @@ export const ConfigForm: React.FC<ConfigFormProps> = ({
         </div>
         <div className="md:col-span-2">
           <label htmlFor="prompt-style" className="block text-sm font-medium text-gray-700">
-            画像のテイスト
+            追加の画像テイスト
           </label>
           <input
             type="text"
@@ -69,8 +69,11 @@ export const ConfigForm: React.FC<ConfigFormProps> = ({
             value={promptStyle}
             onChange={(event) => setPromptStyle(event.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="例: 清潔感のある実写風イラスト"
+            placeholder="例: 明るい室内で、作業の手順が伝わる構図"
           />
+          <p className="mt-2 text-xs text-gray-500">
+            カノエくんの外見と公式カラーは固定されます。場面や雰囲気だけ追加指定できます。
+          </p>
         </div>
       </div>
     </div>

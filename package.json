@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test server/*.test.cjs",
     "preview": "vite preview",
     "server": "cd server && node scraping-server.js",
     "start": "npm run server & npm run dev"
