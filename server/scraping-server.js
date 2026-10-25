@@ -11,8 +11,16 @@ const puppeteer =
   isVercel ? require("puppeteer-core") : require("puppeteer");
 const fetch = require("node-fetch");
 const path = require("path");
-// v153はESMのみ（default export）なので .default を取り出す
-const chromium = isVercel ? require("@sparticuz/chromium-min").default : null;
+// v153はESMのみ。Vercelの実行環境は require() でESMを読めない（ERR_REQUIRE_ESM）ので import() で読み込む
+let chromiumModulePromise = null;
+function loadChromium() {
+  if (!chromiumModulePromise) {
+    chromiumModulePromise = import("@sparticuz/chromium-min").then(
+      (mod) => mod.default
+    );
+  }
+  return chromiumModulePromise;
+}
 const {
   createNotionArticle,
   NotionPublisherError,
@@ -279,9 +287,11 @@ async function getVercelChromiumPath() {
   if (chromiumPath) return chromiumPath;
 
   if (!chromiumPathPromise) {
-    chromium.setGraphicsMode = false;
-    chromiumPathPromise = chromium
-      .executablePath(getChromiumPackUrl())
+    chromiumPathPromise = loadChromium()
+      .then((chromium) => {
+        chromium.setGraphicsMode = false;
+        return chromium.executablePath(getChromiumPackUrl());
+      })
       .then((resolvedPath) => {
         chromiumPath = resolvedPath;
         return resolvedPath;
@@ -297,6 +307,7 @@ async function getVercelChromiumPath() {
 
 async function launchBrowser() {
   if (isVercel) {
+    const chromium = await loadChromium();
     const executablePath = await getVercelChromiumPath();
     return puppeteer.launch({
       args: chromium.args,
