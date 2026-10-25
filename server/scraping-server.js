@@ -11,7 +11,8 @@ const puppeteer =
   isVercel ? require("puppeteer-core") : require("puppeteer");
 const fetch = require("node-fetch");
 const path = require("path");
-const chromium = isVercel ? require("@sparticuz/chromium-min") : null;
+// v153はESMのみ（default export）なので .default を取り出す
+const chromium = isVercel ? require("@sparticuz/chromium-min").default : null;
 const {
   createNotionArticle,
   NotionPublisherError,
@@ -270,7 +271,8 @@ function getChromiumPackUrl() {
     return process.env.CHROMIUM_PACK_URL;
   }
 
-  return "https://github.com/Sparticuz/chromium/releases/download/v141.0.0/chromium-v141.0.0-pack.x64.tar";
+  // Brotli脆弱性（CVE-2026-111497）修正済みのChromium 153を使う
+  return "https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.x64.tar";
 }
 
 async function getVercelChromiumPath() {

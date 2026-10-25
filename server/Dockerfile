@@ -1,5 +1,5 @@
 # Cloud Run用 Dockerfile (scraping-server-full.js対応)
-FROM node:18-slim
+FROM node:24-bookworm-slim
 
 # Puppeteer用の依存関係をインストール
 RUN apt-get update \
