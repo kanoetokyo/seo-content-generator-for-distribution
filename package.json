@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
-    "@sparticuz/chromium-min": "^141.0.0",
+    "@sparticuz/chromium-min": "^153.0.0",
     "@supabase/supabase-js": "^2.86.2",
     "@tailwindcss/typography": "^0.5.16",
     "@types/kuromoji": "^0.1.3",
