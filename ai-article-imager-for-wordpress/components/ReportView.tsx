@@ -88,7 +88,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
   }, [autoExecute, finalHtml, postResult, isPreparing, autoFlowExecuted]);
 
   const notifyParent = () => {
-    const parentOrigin = import.meta.env.VITE_MAIN_APP_URL || "http://localhost:5176";
+    const parentOrigin = import.meta.env.VITE_MAIN_APP_URL || window.location.origin;
     const parentWindow = window.parent !== window ? window.parent : window.opener;
     const isIframe = window.parent !== window;
 

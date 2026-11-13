@@ -31,14 +31,6 @@ export const SpreadsheetDataViewer: React.FC<SpreadsheetDataViewerProps> = ({
     setError(null);
 
     try {
-      const apiKey = import.meta.env.VITE_INTERNAL_API_KEY;
-
-      if (!apiKey) {
-        throw new Error(
-          "🔐 環境変数 VITE_INTERNAL_API_KEY が設定されていません。Vercelの環境変数を確認してください。"
-        );
-      }
-
       console.log("📤 APIリクエスト送信中...");
       console.log("  URL:", `${apiBaseUrl}/api/spreadsheet-mode/keywords`);
 
@@ -46,9 +38,7 @@ export const SpreadsheetDataViewer: React.FC<SpreadsheetDataViewerProps> = ({
         `${apiBaseUrl}/api/spreadsheet-mode/keywords`,
         {
           method: "GET",
-          headers: {
-            "x-api-key": apiKey,
-          },
+          credentials: "include",
         }
       );
 

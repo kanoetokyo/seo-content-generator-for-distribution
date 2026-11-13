@@ -7,9 +7,12 @@ export default defineConfig(({ mode }) => {
     const parentEnv = loadEnv(mode, '..', '');
     const localEnv = loadEnv(mode, '.', '');
     const env = { ...parentEnv, ...localEnv, ...process.env };
-    const apiUrl = env.VITE_API_URL || 'http://localhost:3001/api';
+    // 本番は SEO ツール本体と同じドメイン（/image-tool/）で動き、API も同じドメインの /api を使う
+    const apiUrl = env.VITE_API_URL || (mode === 'production' ? '/api' : 'http://localhost:3001/api');
+    const base = env.IMAGE_TOOL_BASE || '/';
     
     return {
+      base,
       plugins: [react()],
       server: {
         port: 5177, // 画像生成エージェント専用ポート
@@ -27,9 +30,12 @@ export default defineConfig(({ mode }) => {
       },
       assetsInclude: ['**/*.png', '**/*.jpg', '**/*.jpeg'],
       define: {
-        // APIキーはブラウザへ渡さず、APIサーバー側で管理する
+        // APIキーはブラウザへ渡さない。認証は同じドメインのログインCookieで行う
         'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
-        'import.meta.env.VITE_INTERNAL_API_KEY': JSON.stringify(env.VITE_INTERNAL_API_KEY),
+        'import.meta.env.VITE_INTERNAL_API_KEY': JSON.stringify(''),
+        'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(''),
+        'import.meta.env.VITE_OPENAI_API_KEY': JSON.stringify(''),
+        'import.meta.env.VITE_GOOGLE_API_KEY': JSON.stringify(''),
       },
       resolve: {
         alias: {

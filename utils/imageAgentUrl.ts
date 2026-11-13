@@ -1,5 +1,9 @@
 export const getImageAgentUrl = () => {
+  // 画像ツールは同じドメインの /image-tool/ で動く（ログインCookieを共有するため）
   const configuredUrl = import.meta.env.VITE_IMAGE_GEN_URL;
+  if (configuredUrl && typeof window !== "undefined") {
+    return new URL(configuredUrl, window.location.origin).href;
+  }
   if (configuredUrl) return configuredUrl;
 
   if (
@@ -9,5 +13,8 @@ export const getImageAgentUrl = () => {
     return "http://localhost:5177";
   }
 
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/image-tool/`;
+  }
   return "";
 };

@@ -33,6 +33,14 @@ const {
   generateKanoeImage,
 } = require("./openai-image-service.cjs");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+const {
+  loginWithYoyaku,
+  readSessionUser,
+  setSessionCookie,
+  clearSessionCookie,
+  timingSafeEqualString,
+} = require("./yoyaku-auth.cjs");
+const { createGeminiProxy } = require("./gemini-proxy.cjs");
 
 const app = express();
 const PORT = process.env.PORT || 3001; // Renderでは環境変数PORTを使用
@@ -60,47 +68,30 @@ const allowedOrigins = [
   process.env.IMAGE_AGENT_URL,     // 画像生成エージェントのURL
 ].filter(Boolean);
 
+// CORS：同じドメインからの呼び出しと、明示した開発用・設定済みのURLだけを許可する。
+// （以前は *.vercel.app をすべて許可していたが、ログインCookieを使うため絞る）
 app.use(
-  cors({
-    origin: (origin, callback) => {
-      // originがundefinedの場合（同じサーバーからのリクエスト）は許可
-      if (!origin) return callback(null, true);
-
-      // 許可されたオリジンリストをチェック
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      // Vercelの動的ドメインを許可（*.vercel.app）
-      if (origin.endsWith(".vercel.app")) {
-        console.log(`✅ Vercel domain allowed: ${origin}`);
-        return callback(null, true);
-      }
-
-      // 本番環境では追加のドメインパターンをチェック
-      if (process.env.NODE_ENV === "production") {
-        // 必要に応じて他のドメインパターンを追加
-        const allowedPatterns = [
-          /^https:\/\/.*\.vercel\.app$/,
-          /^https:\/\/.*\.netlify\.app$/,
-        ];
-
-        for (const pattern of allowedPatterns) {
-          if (pattern.test(origin)) {
-            console.log(`✅ Pattern matched domain allowed: ${origin}`);
-            return callback(null, true);
-          }
-        }
-      }
-
-      console.warn(`🚫 CORS blocked: ${origin}`);
-      callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "x-api-key", "Authorization"],
-    exposedHeaders: ["Content-Range", "X-Content-Range"],
-    maxAge: 86400, // 24時間キャッシュ
+  cors((req, callback) => {
+    const origin = req.header("Origin");
+    const host = req.header("x-forwarded-host") || req.header("host");
+    let sameOrigin = false;
+    try {
+      sameOrigin = Boolean(origin && host && new URL(origin).host === host);
+    } catch {
+      sameOrigin = false;
+    }
+    if (!origin || sameOrigin || allowedOrigins.includes(origin)) {
+      return callback(null, {
+        origin: true,
+        credentials: true,
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "x-api-key", "Authorization", "x-goog-api-client", "x-goog-upload-protocol", "x-goog-upload-command", "x-goog-upload-header-content-length", "x-goog-upload-header-content-type", "x-goog-upload-offset"],
+        exposedHeaders: ["Content-Range", "X-Content-Range", "x-goog-upload-url", "x-goog-upload-status"],
+        maxAge: 86400,
+      });
+    }
+    console.warn(`🚫 CORS blocked: ${origin}`);
+    return callback(null, { origin: false });
   })
 );
 
@@ -133,43 +124,70 @@ const apiLimiter = rateLimit({
   },
 });
 
-// 認証ミドルウェア（APIキー認証）
-const authenticate = (req, res, next) => {
-  console.log(`🔐 Auth check for: ${req.method} ${req.path}`);
-  console.log(`🔐 Request IP: ${req.ip}`);
-  console.log(
-    `🔐 API Key provided: ${req.headers["x-api-key"] ? "YES" : "NO"}`
-  );
+// ログイン（予約革命アカウント）— 認証ミドルウェアより前に置く
+app.get("/api/auth/me", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ user: readSessionUser(req) });
+});
 
-  // ヘルスチェックと旧WordPress設定取得は認証不要
-  if (req.path === "/health" || req.path === "/wordpress/config") {
-    console.log(`🔐 ${req.path} - skipping auth`);
+app.post("/api/auth/login", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const { email, password, totpCode } = req.body || {};
+  const result = await loginWithYoyaku({
+    email,
+    password,
+    totpCode,
+    clientKey: req.ip || "unknown",
+  });
+  if (!result.ok) {
+    const status = result.code === "RATE_LIMITED" ? 429 : result.code === "UNAVAILABLE" ? 503 : 401;
+    return res.status(status).json({ ok: false, code: result.code, message: result.message });
+  }
+  setSessionCookie(req, res, result.token);
+  return res.json({ ok: true, user: result.user });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  clearSessionCookie(req, res);
+  res.json({ ok: true });
+});
+
+// 認証ミドルウェア：ログイン済みのセッション、または社内APIキー（サーバー間の呼び出し用）
+const authenticate = (req, res, next) => {
+  // ヘルスチェックとログイン系は認証不要
+  if (req.path === "/health" || req.path.startsWith("/auth/")) {
+    return next();
+  }
+
+  const sessionUser = readSessionUser(req);
+  if (sessionUser) {
+    req.sessionUser = sessionUser;
     return next();
   }
 
   const apiKey = req.headers["x-api-key"];
   const validApiKey = process.env.INTERNAL_API_KEY;
-
-  if (!validApiKey) {
-    console.error("⚠️ INTERNAL_API_KEY が設定されていません");
-    return res.status(500).json({ error: "Server configuration error" });
+  if (apiKey && validApiKey && timingSafeEqualString(apiKey, validApiKey)) {
+    return next();
   }
 
-  if (!apiKey || apiKey !== validApiKey) {
-    console.warn(
-      `🚫 認証失敗: ${req.ip} - ${req.path} - API Key: ${
-        apiKey ? "PROVIDED_BUT_INVALID" : "NOT_PROVIDED"
-      }`
-    );
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  console.log(`✅ 認証成功: ${req.ip} - ${req.path}`);
-  next();
+  console.warn(`🚫 認証失敗: ${req.ip} - ${req.path}`);
+  return res.status(401).json({ error: "Unauthorized", code: "LOGIN_REQUIRED" });
 };
+
+// Gemini の中継は呼び出し回数が多いので、通常の制限とは別枠にする
+const geminiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1500,
+  message: { error: "Too many requests, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => (req.sessionUser && req.sessionUser.id) || req.ip || "unknown",
+});
 
 // 全APIエンドポイントに認証とRate Limitingを適用
 app.use("/api", authenticate);
+app.use("/api/gemini", geminiLimiter, createGeminiProxy());
 app.use("/api", apiLimiter);
 
 // Google Search API設定
@@ -611,7 +629,6 @@ async function scrapeHeadings(url) {
 app.post("/api/scrape", async (req, res) => {
   console.log("🔥 SCRAPE ENDPOINT HIT!");
   console.log("Request IP:", req.ip);
-  console.log("Request headers:", req.headers);
   console.log("Request body:", req.body);
   console.log("Timestamp:", new Date().toISOString());
 

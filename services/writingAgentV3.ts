@@ -551,14 +551,6 @@ async function fetchInternalLinkMap(): Promise<Map<string, string>> {
   const linkMap = new Map<string, string>();
 
   try {
-    const API_KEY = import.meta.env.VITE_INTERNAL_API_KEY;
-    if (!API_KEY) {
-      console.warn(
-        "⚠️ INTERNAL_API_KEY未設定のため、内部リンクマップを取得できません"
-      );
-      return linkMap;
-    }
-
     const API_URL =
       import.meta.env.VITE_API_URL?.replace("/api", "") ||
       import.meta.env.VITE_BACKEND_URL ||
@@ -566,9 +558,7 @@ async function fetchInternalLinkMap(): Promise<Map<string, string>> {
     const response = await fetch(
       `${API_URL}/api/spreadsheet-mode/internal-links`,
       {
-        headers: {
-          "x-api-key": API_KEY,
-        },
+        credentials: "include",
       }
     );
 
