@@ -64,20 +64,13 @@ class SlackNotificationService {
 
     try {
       // サーバー経由でSlack通知を送信（CORS回避）
-      const apiKey = import.meta.env.VITE_INTERNAL_API_KEY;
-      if (!apiKey) {
-        console.warn(
-          "⚠️ Slack通知: VITE_INTERNAL_API_KEY が未設定のため送信できません"
-        );
-        return;
-      }
       const backendUrl =
         import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
       const response = await fetch(`${backendUrl}/api/slack-notify`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": apiKey, // 認証ヘッダーを追加
         },
         body: JSON.stringify({ message }),
       });

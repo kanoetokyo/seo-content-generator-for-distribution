@@ -1288,24 +1288,15 @@ const App: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const apiKey = import.meta.env.VITE_INTERNAL_API_KEY;
       const apiUrl =
         import.meta.env.VITE_API_URL?.replace("/api", "") ||
         import.meta.env.VITE_BACKEND_URL ||
         "http://localhost:3001";
 
-      if (!apiKey) {
-        throw new Error(
-          "🔐 環境変数 VITE_INTERNAL_API_KEY が設定されていません"
-        );
-      }
-
       console.log("📤 スプレッドシートからキーワードを取得中...");
       const response = await fetch(`${apiUrl}/api/spreadsheet-mode/keywords`, {
         method: "GET",
-        headers: {
-          "x-api-key": apiKey,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) {

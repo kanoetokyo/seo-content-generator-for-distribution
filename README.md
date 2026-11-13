@@ -86,7 +86,7 @@ npm install
 ```env
 # Gemini API（Google AI Studioで取得したキー）
 GEMINI_API_KEY=ここにあなたのGemini APIキーを貼り付け
-VITE_GEMINI_API_KEY=ここにも同じキーを貼り付け
+# （廃止）VITE_ 付きの鍵は画面のJavaScriptに埋め込まれて公開されるため使わない。鍵はサーバー側の変数だけに置く。
 
 # GPT Image 2画像生成（OpenAI Platformで取得したキー）
 OPENAI_API_KEY=ここにOpenAI APIキーを貼り付け
@@ -95,7 +95,6 @@ OPENAI_API_KEY=ここにOpenAI APIキーを貼り付け
 #
 # 【推奨】Google Custom Search API
 GOOGLE_API_KEY=ここにGoogle APIキーを貼り付け
-VITE_GOOGLE_API_KEY=ここにも同じキーを貼り付け
 GOOGLE_SEARCH_ENGINE_ID=ここに検索エンジンIDを貼り付け
 VITE_GOOGLE_SEARCH_ENGINE_ID=ここにも同じIDを貼り付け
 #
@@ -105,7 +104,9 @@ VITE_GOOGLE_SEARCH_ENGINE_ID=ここにも同じIDを貼り付け
 # バックエンド認証（競合調査/スプレッドシート/Slack/Notion連携などで使用）
 # 例）openssl rand -hex 32 で生成した値を貼り付け
 INTERNAL_API_KEY=任意の長いランダム文字列
-VITE_INTERNAL_API_KEY=ここにも同じ値を貼り付け
+# 画面からの利用は予約革命アカウントでのログイン（Cookie）で認証する。INTERNAL_API_KEY はサーバー間の呼び出し専用。
+YOYAKU_SUPABASE_ANON_KEY=予約革命のSupabase公開キー
+SESSION_SECRET=openssl rand -hex 32 で生成した値
 
 # Notionブログ連携（画像生成した記事の保存先）
 # Notionで作成したIntegrationのシークレットを設定し、ブログ記事DBを共有してください。

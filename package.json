@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run build:image-tool && node scripts/check-no-secrets-in-dist.mjs",
     "test": "node --test server/*.test.cjs",
     "preview": "vite preview",
     "server": "cd server && node scraping-server.js",
-    "start": "npm run server & npm run dev"
+    "start": "npm run server & npm run dev",
+    "build:image-tool": "npm ci --prefix ai-article-imager-for-wordpress --include=dev --no-audit --no-fund && cd ai-article-imager-for-wordpress && IMAGE_TOOL_BASE=/image-tool/ npx vite build --outDir ../dist/image-tool --emptyOutDir"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

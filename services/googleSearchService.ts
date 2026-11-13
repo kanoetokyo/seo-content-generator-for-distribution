@@ -30,23 +30,14 @@ export async function searchGoogle(
   try {
     console.log("🔍 Calling server Google search endpoint...");
 
-    // 認証ヘッダーを取得
-    const internalApiKey = import.meta.env.VITE_INTERNAL_API_KEY;
-
-    if (!internalApiKey) {
-      throw new Error(
-        "内部APIキーが読み込まれていません。.env の INTERNAL_API_KEY / VITE_INTERNAL_API_KEY を確認し、サーバーを再起動してください。"
-      );
-    }
-
     // サーバーのエンドポイントを呼び出す
     const backendUrl =
       import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
     const response = await fetch(`${backendUrl}/api/google-search`, {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": internalApiKey,
       },
       body: JSON.stringify({ query, numResults }),
     });
@@ -55,7 +46,7 @@ export async function searchGoogle(
       const errorMessage = await readErrorMessage(response);
       if (response.status === 401) {
         throw new Error(
-          "内部API認証エラーです。.env の INTERNAL_API_KEY と VITE_INTERNAL_API_KEY を同じ値にして、bash ./start.sh を再起動してください。"
+          "ログインの有効期限が切れました。ページを再読み込みしてログインし直してください。"
         );
       }
       throw new Error(errorMessage);

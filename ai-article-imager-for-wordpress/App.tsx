@@ -88,6 +88,7 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
         "http://127.0.0.1:5177", // 127.0.0.1でアクセスした場合
         "http://127.0.0.1:5178", // 127.0.0.1でアクセスした場合
         import.meta.env.VITE_MAIN_APP_URL, // 本番用（.envで設定）
+        window.location.origin, // 本体と同じドメインで動くとき
       ].filter(Boolean); // undefined を除外
 
       if (!ALLOWED_ORIGINS.includes(event.origin)) {
@@ -241,6 +242,7 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
         "http://127.0.0.1:5177", // 127.0.0.1でアクセスした場合
         "http://127.0.0.1:5178", // 127.0.0.1でアクセスした場合
         import.meta.env.VITE_MAIN_APP_URL, // 本番用（.envで設定）
+        window.location.origin, // 本体と同じドメインで動くとき
       ].filter(Boolean); // undefined を除外
 
       if (!ALLOWED_ORIGINS.includes(event.origin)) {
@@ -425,7 +427,7 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
               <div className="bg-white p-6 rounded-lg shadow-md">
                 <div className="flex h-full flex-col items-center justify-center text-center">
                   <img
-                    src="/default-images/kanoe-kun.png"
+                    src={`${import.meta.env.BASE_URL}default-images/kanoe-kun.png`}
                     alt="カノエくん"
                     className="h-40 w-40 object-contain"
                   />

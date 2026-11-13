@@ -1,7 +1,7 @@
 // デフォルト画像の読み込みユーティリティ
 
 // デフォルト画像のパスを定義
-const DEFAULT_IMAGES_PATH = '/default-images/';
+const DEFAULT_IMAGES_PATH = `${import.meta.env.BASE_URL}default-images/`;
 
 // 対応する画像拡張子
 const SUPPORTED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
